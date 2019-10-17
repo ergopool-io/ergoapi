@@ -1,0 +1,6 @@
+.idea/*
+*.pyc
+*__pychache__*
+*.sqlite3
+ErgoApi/production.py
+.DS_Store
