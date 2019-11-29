@@ -11,3 +11,7 @@ DATABASES = {
         'PORT': '5432',
     }
 }
+
+
+# Access url for accounting system
+ACCOUNTING_URL = "http://127.0.0.1:8000"
