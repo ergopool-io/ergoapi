@@ -1,11 +1,15 @@
-from django.urls import path, include
 from rest_framework import routers
+from django.urls import path, include
 
-from Api.views import HelloWorldViewset
+from . import views
+
 
 router = routers.DefaultRouter()
-router.register('hello', HelloWorldViewset, basename='')
+router.register(r'shares', views.ShareView)
+
 
 urlpatterns = [
-    path('', include(router.urls))
+    path('api/', include(router.urls)),
+    path('', views.AccountView.as_view(), name='account'),
+    path('<str:public_key>/', views.AccountView.as_view(), name='account'),
 ]
