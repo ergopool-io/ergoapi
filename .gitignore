@@ -4,6 +4,6 @@
 *.sqlite3
 ErgoApi/production.py
 .DS_Store
+.venv/*
 */migrations/*
 !*/migrations/__init__.py
-
