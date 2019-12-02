@@ -45,4 +45,3 @@ class ShareView(viewsets.GenericViewSet,
         url = os.path.join(ACCOUNTING, "shares/")
         response = requests.post(url, json=result)
         print(response.content)
-
