@@ -22,3 +22,19 @@ class ShareSerializer(serializers.Serializer):
 
     class Meta:
         fields = ['pk', 'nonce', 'd', 'w']
+
+
+class ProofSerializer(serializers.Serializer):
+    pk = serializers.CharField()
+    msg_pre_image = serializers.CharField()
+    leaf = serializers.CharField()
+    levels = serializers.ListField(child=serializers.CharField())
+
+    def update(self, instance, validated_data):
+        pass
+
+    def create(self, validated_data):
+        pass
+
+    class Meta:
+        fields = ['pk', 'msg_pre_image', 'leaf', 'levels']

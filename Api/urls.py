@@ -5,7 +5,8 @@ from . import views
 
 
 router = routers.DefaultRouter()
-router.register(r'shares', views.ShareView)
+router.register(r'share', views.ShareView, basename='Share')
+router.register(r'header', views.HeaderView, basename='Header')
 
 
 urlpatterns = [
