@@ -5,7 +5,6 @@ from django.conf import settings
 from django.shortcuts import render
 from django.views import View
 from rest_framework import viewsets, mixins
-from Api.models import *
 from Api import serializers
 
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL", "http://127.0.0.1:8000")
@@ -29,10 +28,11 @@ class AccountView(View):
 
 
 class ShareView(viewsets.GenericViewSet,
-                mixins.ListModelMixin,
                 mixins.CreateModelMixin):
-    queryset = NoModel.objects.all()
     serializer_class = serializers.ShareSerializer
+
+    def get_queryset(self):
+        return None
 
     def perform_create(self, serializer):
         share = serializer.validated_data
@@ -45,4 +45,21 @@ class ShareView(viewsets.GenericViewSet,
         url = os.path.join(ACCOUNTING, "shares/")
         response = requests.post(url, json=result)
         print(response.content)
+
+
+class HeaderView(viewsets.GenericViewSet,
+                 mixins.CreateModelMixin):
+    serializer_class = serializers.ProofSerializer
+
+    def get_queryset(self):
+        return None
+
+    def create(self, request, *args, **kwargs):
+        pass
+
+
+class Transaction(viewsets.GenericViewSet,
+                  mixins.CreateModelMixin):
+    def get_queryset(self):
+        return None
 
