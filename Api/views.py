@@ -4,8 +4,11 @@ import requests
 from django.conf import settings
 from django.shortcuts import render
 from django.views import View
-from rest_framework import viewsets, mixins
+from rest_framework import viewsets, mixins, status
+from rest_framework.response import Response
+
 from Api import serializers
+from Api.util import validation_proof
 
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL", "http://127.0.0.1:8000")
 
@@ -55,11 +58,20 @@ class HeaderView(viewsets.GenericViewSet,
         return None
 
     def create(self, request, *args, **kwargs):
-        pass
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.data
+        validation = validation_proof(
+            pk=data.get("pk"),
+            msg_pre_image_base16=data.get("msg_pre_image"),
+            leaf=data.get("leaf"),
+            levels_encoded=data.get("levels")
+        )
+        headers = self.get_success_headers(serializer.data)
+        return Response(validation, status=status.HTTP_201_CREATED, headers=headers)
 
 
 class Transaction(viewsets.GenericViewSet,
                   mixins.CreateModelMixin):
     def get_queryset(self):
         return None
-
