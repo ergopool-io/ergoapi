@@ -12,7 +12,7 @@ class ShareSerializer(serializers.Serializer):
         try:
             return int(value)
         except:
-            raise ValidationError(_("invalid number entered"))
+            raise ValidationError("invalid number entered")
 
     def update(self, instance, validated_data):
         pass
