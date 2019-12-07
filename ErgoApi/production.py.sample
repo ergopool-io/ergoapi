@@ -13,7 +13,7 @@ DATABASES = {
 }
 
 # Difficulty of pool (pb) (ex: 799144731656113400000000000000000000000000000000000000000000000)
-POOL_DIFFICULTY = "Difficulty of pool (pb)""
+POOL_DIFFICULTY = "Difficulty of pool (pb)"
 
 # Address Node (ex: "http://127.0.0.1:9053/")
 NODE_ADDRESS = "Address Node"
