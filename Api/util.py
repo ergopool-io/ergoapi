@@ -56,7 +56,6 @@ def validation_proof(pk, msg_pre_image_base16, leaf, levels_encoded):
                 'message': 'Transaction not generated.',
                 'status': 'failed'
             }
-
     msg_pre_image = decode(msg_pre_image_base16, "hex")
     # hash of "msg_pre_image" (which is a header without PoW) should be equal to "msg"
     msg = blake(msg_pre_image, 'hex')
@@ -64,7 +63,6 @@ def validation_proof(pk, msg_pre_image_base16, leaf, levels_encoded):
     txs_root = msg_pre_image[65:97]
     # tx_id is a "leaf" in a Merkle proof
     tx_id = leaf
-
     # Merkle proof element is encoded in the following way:
     # - first, 1 byte showing whether COMPUTED value is on the right (1) or on the left (0)
     # - second, 32 bytes of stored value
@@ -220,24 +218,20 @@ def validation_block(pk, w, n, d):
             'share': blake(nonce + p1 + p2, 'hex'),
             'status': "invalid"
         }
-
     # Create response for share
     response = {
         'public_key': pk,
         'share': share_id,
         'status': ''
     }
-
     # Send request to node for get base of network
     data_node = node_request('mining/candidate', {'accept': 'application/json', 'api_key': API_KEY})
     if data_node['status'] == 'External Error':
         return data_node
     else:
         base = data_node.get('b')
-
     # Compare difficulty and base
     flag = 1 if d < base else (2 if base < d < POOL_DIFFICULTY else 0)
-
     # For checked get response from 'Node'
     f = list()
     for i in gen_indexes(message + nonce):
@@ -249,16 +243,13 @@ def validation_block(pk, w, n, d):
                 return {'public_key': pk, 'share': "Can not resolve", 'status': 'External Error'}
             else:
                 f.append(check)
-
     f = sum(f) % constant.Q
     pk_ec_point = ec_point(p1)
     w_ec_point = ec_point(p2)
     if w_ec_point['status'] == 'invalid' or pk_ec_point['status'] == 'invalid':
         return {'public_key': pk, 'share': share_id, 'status': 'invalid'}
-
     left = w_ec_point['value'].mul(f)
     right = constant.G.mul(d).add(pk_ec_point['value'])
-
     data_node = node_request('info', {'accept': 'application/json'})
     if data_node['status'] == 'External Error':
         return data_node
@@ -270,5 +261,4 @@ def validation_block(pk, w, n, d):
     if response['status'] == 'solved':
         response.update({'headersHeight': height})
         response.update({'tx_id': tx_id})
-
     return response

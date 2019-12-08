@@ -8,7 +8,8 @@ from rest_framework import viewsets, mixins, status
 from rest_framework.response import Response
 
 from Api import serializers
-from Api.util import validation_proof
+from Api.models import Block
+from Api.util import validation_proof, validation_block
 
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL", "http://127.0.0.1:8000")
 
@@ -37,17 +38,24 @@ class ShareView(viewsets.GenericViewSet,
     def get_queryset(self):
         return None
 
-    def perform_create(self, serializer):
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         share = serializer.validated_data
-        # TODO first validate this share
-        result = {
-            "miner": share.get("pk"),
-            "share": share.get("w"),
-            "status": 2
-        }
+        result = validation_block(
+            pk=share.get("pk"),
+            n=share.get("nonce"),
+            w=share.get("w"),
+            d=share.get("d")
+        )
         url = os.path.join(ACCOUNTING, "shares/")
-        response = requests.post(url, json=result)
-        print(response.content)
+        response = requests.post(url, json={
+            "miner": result.get("public_key"),
+            "share": result.get("share"),
+            "status": result.get("status"),
+        }).json()
+        headers = self.get_success_headers(serializer.data)
+        return Response(response, status=status.HTTP_201_CREATED, headers=headers)
 
 
 class HeaderView(viewsets.GenericViewSet,
@@ -71,7 +79,21 @@ class HeaderView(viewsets.GenericViewSet,
         return Response(validation, status=status.HTTP_201_CREATED, headers=headers)
 
 
-class Transaction(viewsets.GenericViewSet,
-                  mixins.CreateModelMixin):
+class TransactionView(viewsets.GenericViewSet, mixins.CreateModelMixin):
+    serializer_class = serializers.TransactionSerializer
+
     def get_queryset(self):
         return None
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        pk = serializer.validated_data.get('pk', "")
+        transaction = serializer.validated_data.get('transaction', {})
+        block = Block.objects.filter(public_key=pk).first()
+        if not block:
+            block = Block(public_key=pk)
+        block.tx_id = transaction.get("id")
+        block.save()
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
