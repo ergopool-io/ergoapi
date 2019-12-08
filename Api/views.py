@@ -6,10 +6,14 @@ from django.shortcuts import render
 from django.views import View
 from rest_framework import viewsets, mixins, status
 from rest_framework.response import Response
+from rest_framework import filters
+from rest_framework.authentication import SessionAuthentication
+from rest_framework.permissions import IsAuthenticated
 
 from Api import serializers
 from Api.models import Block
 from Api.util import validation_proof, validation_block
+from Api.models import Configuration
 
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL", "http://127.0.0.1:8000")
 
@@ -97,3 +101,36 @@ class TransactionView(viewsets.GenericViewSet, mixins.CreateModelMixin):
         block.save()
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class ConfigurationViewSet(viewsets.GenericViewSet,
+                           mixins.CreateModelMixin,
+                           mixins.ListModelMixin):
+    # For session authentication
+    authentication_classes = [SessionAuthentication]
+    # For token authentication
+    permission_classes = (IsAuthenticated,)
+    serializer_class = serializers.ConfigurationSerializer
+    queryset = Configuration.objects.all()
+    filter_backends = (filters.SearchFilter,)
+    search_fields = ('key', 'value',)
+
+    def perform_create(self, serializer, *args, **kwargs):
+        """
+        we override the perform_create to create a new configuration
+        or update an existing configuration.
+        :param serializer:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        key = serializer.validated_data['key']
+        value = serializer.validated_data['value']
+        configurations = Configuration.objects.filter(key=key)
+        if not configurations:
+            serializer.save()
+        else:
+            configuration = Configuration.objects.get(key=key)
+            configuration.value = value
+            configuration.save()
+
