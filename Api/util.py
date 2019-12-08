@@ -1,4 +1,4 @@
-from ErgoApi.settings import POOL_DIFFICULTY, NODE_ADDRESS, API_KEY
+from ErgoApi.settings import POOL_DIFFICULTY, NODE_ADDRESS
 from Api.models import Block
 import Api.constant as constant
 from codecs import decode
@@ -40,6 +40,7 @@ def validation_proof(pk, msg_pre_image_base16, leaf, levels_encoded):
     :param levels_encoded:
     :return:
     """
+
     try:
         # Get information miner(ex: Transaction Id) from database
         block = Block.objects.get(public_key=pk)
@@ -56,7 +57,17 @@ def validation_proof(pk, msg_pre_image_base16, leaf, levels_encoded):
                 'message': 'Transaction not generated.',
                 'status': 'failed'
             }
-    msg_pre_image = decode(msg_pre_image_base16, "hex")
+    try:
+        msg_pre_image = decode(msg_pre_image_base16, "hex")
+    except ValueError as e:
+        logging.error(e)
+        logging.error("Type of input is invalid.")
+        return {
+                'public_key': pk,
+                'message': 'Type of input is invalid',
+                'status': 'failed'
+            }
+
     # hash of "msg_pre_image" (which is a header without PoW) should be equal to "msg"
     msg = blake(msg_pre_image, 'hex')
     # Transactions Merkle tree digest is in bytes 65-96 (inclusive) of the unproven header
@@ -66,7 +77,16 @@ def validation_proof(pk, msg_pre_image_base16, leaf, levels_encoded):
     # Merkle proof element is encoded in the following way:
     # - first, 1 byte showing whether COMPUTED value is on the right (1) or on the left (0)
     # - second, 32 bytes of stored value
-    levels = list(map(lambda le: [decode(le, "hex")[1:], decode(le, "hex")[0:1]], levels_encoded))
+    try:
+        levels = list(map(lambda le: [decode(le, "hex")[1:], decode(le, "hex")[0:1]], levels_encoded))
+    except ValueError as e:
+        logging.error(e)
+        logging.error("Type of input is invalid.")
+        return {
+                'public_key': pk,
+                'message': 'Type of input is invalid',
+                'status': 'failed'
+            }
     leaf_hash = blake(decode('00', "hex") + decode(tx_id, "hex"))
     for level in levels:
         if level[1] == decode('01', "hex"):
@@ -199,9 +219,20 @@ def validation_block(pk, w, n, d):
     :return: (uniq id share and status share)
     """
     # Convert to array bytes
-    nonce = decode(n, "hex")
-    p1 = decode(pk, "hex")
-    p2 = decode(w, "hex")
+    try:
+        nonce = decode(n, "hex")
+        p1 = decode(pk, "hex")
+        p2 = decode(w, "hex")
+    except ValueError as e:
+        logging.error(e)
+        logging.error("Type of input is invalid.")
+        return {
+            'public_key': pk,
+            # Generate uniq id for share
+            'share': blake(pk + n + w, 'hex'),
+            'status': "invalid"
+        }
+
     try:
         # Get information share(ex: Message(hash of header block), Transaction Id) from database
         block = Block.objects.get(public_key=pk)
@@ -225,7 +256,7 @@ def validation_block(pk, w, n, d):
         'status': ''
     }
     # Send request to node for get base of network
-    data_node = node_request('mining/candidate', {'accept': 'application/json', 'api_key': API_KEY})
+    data_node = node_request('mining/candidate', {'accept': 'application/json'})
     if data_node['status'] == 'External Error':
         return data_node
     else:
