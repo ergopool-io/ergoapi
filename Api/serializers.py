@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
+from Api.models import Configuration
 
 
 class ShareSerializer(serializers.Serializer):
@@ -53,3 +54,8 @@ class TransactionSerializer(serializers.Serializer):
     class Meta:
         fields = ['pk', 'transaction']
 
+
+class ConfigurationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Configuration
+        fields = ['key', 'value']
