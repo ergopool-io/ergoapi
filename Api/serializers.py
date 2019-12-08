@@ -38,3 +38,18 @@ class ProofSerializer(serializers.Serializer):
 
     class Meta:
         fields = ['pk', 'msg_pre_image', 'leaf', 'levels']
+
+
+class TransactionSerializer(serializers.Serializer):
+    pk = serializers.CharField()
+    transaction = serializers.JSONField()
+
+    def update(self, instance, validated_data):
+        pass
+
+    def create(self, validated_data):
+        pass
+
+    class Meta:
+        fields = ['pk', 'transaction']
+
