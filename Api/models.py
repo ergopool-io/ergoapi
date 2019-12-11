@@ -7,8 +7,8 @@ KEY_CHOICES = (
 
 DEFAULT_KEY_VALUES = {
     'POOL_DIFFICULTY_FACTOR': 10,
-    'REWARD_FACTOR': 1,
-    'REWARD': 67.5
+    'REWARD': 67.5,
+    'REWARD_FACTOR': 1
 }
 
 
@@ -31,10 +31,10 @@ class ConfigurationManager(models.Manager):
         """
         if attr in [key for (key, temp) in KEY_CHOICES]:
             configurations = self.get_queryset().all()
-            if attr not in configurations:
+            if attr not in configurations.values_list('key', flat=True):
                 return DEFAULT_KEY_VALUES[attr]
             else:
-                return self.get_queryset().get(key=attr)
+                return self.get_queryset().get(key=attr).value
         else:
             return super(ConfigurationManager, self).__getattribute__(attr)
 
