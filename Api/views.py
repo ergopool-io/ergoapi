@@ -47,7 +47,7 @@ class ShareView(viewsets.GenericViewSet,
         serializer.is_valid(raise_exception=True)
         share = serializer.validated_data
         result = validation_block(
-            pk=share.get("pk"),
+            pk=share.get("pk").lower(),
             n=share.get("nonce"),
             w=share.get("w"),
             d=share.get("d")
@@ -74,7 +74,7 @@ class HeaderView(viewsets.GenericViewSet,
         serializer.is_valid(raise_exception=True)
         data = serializer.data
         validation = validation_proof(
-            pk=data.get("pk"),
+            pk=data.get("pk").lower(),
             msg_pre_image_base16=data.get("msg_pre_image"),
             leaf=data.get("leaf"),
             levels_encoded=data.get("levels")
