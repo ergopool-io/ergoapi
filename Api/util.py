@@ -1,5 +1,5 @@
-from ErgoApi.settings import POOL_DIFFICULTY, NODE_ADDRESS
-from Api.models import Block
+from ErgoApi.settings import NODE_ADDRESS
+from Api.models import Block, Configuration
 import Api.constant as constant
 from codecs import decode
 from hashlib import blake2b
@@ -121,8 +121,9 @@ def node_request(api, header):
     try:
         response = requests.get(NODE_ADDRESS + api, headers=header)
         response = response.json()
-        response.update({'status': 'success'})
-        return response
+        json = {'response': response,
+                'status': 'success'}
+        return json
     except requests.exceptions.RequestException as e:
         logging.error(e)
         logging.error("Can not resolve response from node")
@@ -260,9 +261,11 @@ def validation_block(pk, w, n, d):
     if data_node['status'] == 'External Error':
         return data_node
     else:
-        base = data_node.get('b')
+        base = data_node.get('response').get('b')
+    # Set POOL_DIFFICULTY
+    pool_difficulty = base * Configuration.objects.POOL_DIFFICULTY_FACTOR
     # Compare difficulty and base
-    flag = 1 if d < base else (2 if base < d < POOL_DIFFICULTY else 0)
+    flag = 1 if d < base else (2 if base < d < pool_difficulty else 0)
     # For checked get response from 'Node'
     f = list()
     for i in gen_indexes(message + nonce):
@@ -285,7 +288,7 @@ def validation_block(pk, w, n, d):
     if data_node['status'] == 'External Error':
         return data_node
     else:
-        height = data_node.get('headersHeight')
+        height = data_node.get('response').get('headersHeight')
     # ValidateBlock
     response['status'] = 'solved' if left == right and flag == 1 else \
         ('valid' if left == right and flag == 2 else 'invalid')

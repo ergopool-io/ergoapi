@@ -2,7 +2,7 @@ from django.test.testcases import TransactionTestCase, TestCase
 from django.test.client import RequestFactory
 from rest_framework.test import APIClient
 from unittest.mock import patch
-from Api.models import Block, KEY_CHOICES, Configuration
+from Api.models import Block, KEY_CHOICES, Configuration, DEFAULT_KEY_VALUES
 from django.contrib.auth.models import User
 from Api.util import validation_block, gen_indexes, gen_element, validation_proof
 from ErgoApi.settings import NODE_ADDRESS
@@ -41,6 +41,9 @@ def mocked_requests_get(*args, **kwargs):
         })
     elif args[0] == NODE_ADDRESS + 'info':
         return MockResponse({"headersHeight": 41496})
+
+    elif args[0] == NODE_ADDRESS + 'wallet/addresses':
+        return MockResponse(["3WvrVTCPJ1keSdtqNL5ayzQ62MmTNz4Rxq7vsjcXgLJBwZkvHrGa"])
 
     return MockResponse(None)
 
@@ -112,7 +115,7 @@ class TestValidateBlock(TransactionTestCase):
                              'status': 'invalid'})
 
 
-class ConfigurationAPITest(TestCase):
+class ConfigurationManageApiTest(TestCase):
     """
     Test class for Configuration API
     This class has 3 test function based on 3 following general situations:
@@ -124,7 +127,7 @@ class ConfigurationAPITest(TestCase):
         self.factory = RequestFactory()
         User.objects.create_user(username='test', password='test')
 
-    def test_Configuration_API_get_method_list(self):
+    def test_configuration_Api_get_method_list(self):
         """
         In this scenario we want to test the functionality of Configuration API when
         it is called by a http 'get' method.
@@ -152,7 +155,7 @@ class ConfigurationAPITest(TestCase):
         # check the content of the response
         self.assertEqual(response.json(), expected_response)
 
-    def test_Configuration_API_post_method_create(self):
+    def test_configuration_api_post_method_create(self):
         """
         In this scenario we want to test the functionality of Configuration API when
         it is called by a http 'post' method to create a new configuration
@@ -179,7 +182,7 @@ class ConfigurationAPITest(TestCase):
             # check the value of the new created object
             self.assertEqual(configuration.value, 1)
 
-    def test_Configuration_API_post_method_update(self):
+    def test_configuration_api_post_method_update(self):
         """
         In this scenario we want to test the functionality of Configuration API when
         it is called by a http 'post' method to update an existing configuration.
@@ -216,3 +219,67 @@ class ConfigurationAPITest(TestCase):
         # delete all configuration objects
         Configuration.objects.all().delete()
 
+
+class ConfigurationValueApiTest(TransactionTestCase):
+    """
+    Test class for Configuration API
+    This class has 3 test function based on 3 following general situations:
+    1) using http 'get' method to retrieve a list of existing configurations
+    """
+    reset_sequences = True
+
+    @patch('requests.get', side_effect=mocked_requests_get)
+    def test_configuration_api_get_method_list_with_default(self, mock_get):
+        """
+        In this scenario we want to test the functionality of Configuration value API when
+        it is called by a http 'get' or 'list' method.
+        For the above purpose first we delete all object in database for that check if an object there isn't in the
+         database set default value
+        we send a http 'get' method to retrieve a list of them.
+        We expect that the status code of response be '200 ok' and
+        the json format of response be as below .
+        :return:
+        """
+        # Remove all objects from the database for that check if an object there isn't in the database set default value
+        Configuration.objects.all().delete()
+        # response of API /config/value should be this
+        result = {
+            "reward": int(DEFAULT_KEY_VALUES['REWARD'] * DEFAULT_KEY_VALUES['REWARD_FACTOR'] * pow(10, 9)),
+            "wallet_address": "3WvrVTCPJ1keSdtqNL5ayzQ62MmTNz4Rxq7vsjcXgLJBwZkvHrGa",
+            "pool_difficulty_factor": DEFAULT_KEY_VALUES['POOL_DIFFICULTY_FACTOR']
+            }
+        # send a http 'get' request to the configuration endpoint
+        response = self.client.get('/api/config/value/')
+        # check the status of the response
+        self.assertEqual(response.status_code, 200)
+        # check the content of the response
+        self.assertEqual(response.json(), result)
+
+    @patch('requests.get', side_effect=mocked_requests_get)
+    def test_configuration_api_get_method_list(self, mock_get):
+        """
+        In this scenario we want to test the functionality of Configuration API when
+        it is called by a http 'get' method.
+        For the above purpose first we create some configurations in the database and then
+        we send a http 'get' method to retrieve a list of them.
+        We expect that the status code of response be '200 ok' and
+        the json format of response be as below .
+        :return:
+        """
+        # Create Objects configuration in database
+        Configuration.objects.create(key='REWARD', value='40')
+        Configuration.objects.create(key='REWARD_FACTOR', value='1')
+        Configuration.objects.create(key='POOL_DIFFICULTY_FACTOR', value='1')
+        # response of API /config/value should be this
+        result = {
+            "reward": 40 * 1 * pow(10, 9),
+            "wallet_address": "3WvrVTCPJ1keSdtqNL5ayzQ62MmTNz4Rxq7vsjcXgLJBwZkvHrGa",
+            "pool_difficulty_factor": 1
+            }
+
+        # send a http 'get' request to the configuration endpoint
+        response = self.client.get('/api/config/value/')
+        # check the status of the response
+        self.assertEqual(response.status_code, 200)
+        # check the content of the response
+        self.assertEqual(response.json(), result)
