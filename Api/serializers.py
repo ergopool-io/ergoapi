@@ -59,3 +59,12 @@ class ConfigurationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Configuration
         fields = ['key', 'value']
+
+
+class ConfigurationValueSerializer(serializers.Serializer):
+    reward = serializers.IntegerField()
+    wallet_address = serializers.CharField()
+    pool_difficulty_factor = serializers.FloatField()
+
+    class Meta:
+        fields = ['reward', 'wallet_address', 'pool_difficulty_factor']
