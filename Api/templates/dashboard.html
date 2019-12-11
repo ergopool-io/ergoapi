@@ -28,8 +28,12 @@
                 <td>{{ content.timestamp }}</td>
             </tr>
             <tr>
-                <td>All shares</td>
-                <td>{{ content.round_shares }}</td>
+                <td>Valid shares</td>
+                <td>{{ content.round_valid_shares }}</td>
+            </tr>
+            <tr>
+                <td>Invalid shares</td>
+                <td>{{ content.round_invalid_shares }}</td>
             </tr>
             {% if user_content %}
             <tr>
@@ -41,16 +45,20 @@
                 <td>{{ user_content.immature|default:0 }} erg</td>
             </tr>
             <tr>
-                <td>Your shares</td>
-                <td>{{ user_content.round_shares }}</td>
+                <td>Your valid shares</td>
+                <td>{{ user_content.round_valid_shares }}</td>
+            </tr>
+            <tr>
+                <td>Your invalid shares</td>
+                <td>{{ user_content.round_invalid_shares }}</td>
             </tr>
             <tr>
                 <td>Percentage</td>
-                <td>{{ user_content.round_shares|divide:content.round_shares|multiply:100|floatformat:-2 }} %</td>
+                <td>{{ user_content.round_valid_shares|divide:content.round_valid_shares|multiply:100|floatformat:-2 }} %</td>
             </tr>
             <tr>
                 <td>Earn</td>
-                <td>{{ user_content.round_shares|divide:content.round_shares|multiply:65|floatformat:-2 }} erg</td>
+                <td>{{ user_content.round_valid_shares|divide:content.round_valid_shares|multiply:65|floatformat:-2 }} erg</td>
             </tr>
             {% endif %}
             </tbody>

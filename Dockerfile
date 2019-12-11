@@ -25,4 +25,4 @@ ENV POSTGRESQL_HOST=db
 
 WORKDIR "/var/www/src"
 
-ENTRYPOINT ["uwsgi", "--ini", "/var/www/uwsgi.ini"]
+CMD ["uwsgi", "--ini", "/var/www/uwsgi.ini"]
