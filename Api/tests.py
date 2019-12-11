@@ -90,7 +90,7 @@ class TestValidateBlock(TransactionTestCase):
                          {'public_key': '0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9',
                              'share': 'a1ae8ae3f9f9568fd90ac29009c18997d50829d1f7c0cd0bb500d930631f2065',
                              'status': 'solved',
-                             'headersHeight': 41496,
+                             'headers_height': 41496,
                              'tx_id': '53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5'})
 
     @patch('ErgoApi.settings')

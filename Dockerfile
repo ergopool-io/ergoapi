@@ -4,8 +4,9 @@ WORKDIR "/var/www"
 
 RUN mkdir "src"
 COPY requirements.txt /var/www/
-RUN pip3 install uwsgi
+#RUN apt-get update && apt-get install -y uwsgi uwsgi-plugin-python3 --no-install-recommends && apt-get autoremove --purge
 
+RUN pip3 install uwsgi
 RUN pip3 install -r requirements.txt
 
 ADD Api/ /var/www/src/Api/
