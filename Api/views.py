@@ -9,11 +9,11 @@ from rest_framework.response import Response
 from rest_framework import filters
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import IsAuthenticated
+from django.shortcuts import get_object_or_404
 
 from Api import serializers
-from Api.models import Block
-from Api.util import validation_proof, validation_block
-from Api.models import Configuration
+from Api.models import Block, Configuration, DEFAULT_KEY_VALUES
+from Api.util import validation_proof, validation_block, node_request
 
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL", "http://127.0.0.1:8000")
 
@@ -134,3 +134,34 @@ class ConfigurationViewSet(viewsets.GenericViewSet,
             configuration.value = value
             configuration.save()
 
+
+class ConfigurationValueViewSet(viewsets.GenericViewSet):
+    """
+    View set for api /config/value/
+    Handel list and get method
+    """
+    serializer_class = serializers.ConfigurationValueSerializer
+
+    def get_queryset(self):
+        return None
+
+    def list(self, request, *args, **kwargs):
+        return self.get_response()
+
+    @staticmethod
+    def get_response():
+        config = Configuration.objects.all()
+        result = DEFAULT_KEY_VALUES
+        for x in config.values_list('key', flat=True):
+            result[x] = config.get(key=x).value
+        reward = int(result['REWARD'] * result['REWARD_FACTOR'] * pow(10, 9))
+        data_node = node_request('wallet/addresses', {'accept': 'application/json', 'api_key': settings.API_KEY})
+        if data_node['status'] == 'External Error':
+            return data_node
+        else:
+            wallet_address = data_node.get('response')[0]
+        return Response({
+            'reward': reward,
+            'wallet_address': wallet_address,
+            'pool_difficulty_factor': result['POOL_DIFFICULTY_FACTOR']
+        })
