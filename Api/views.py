@@ -9,7 +9,6 @@ from rest_framework.response import Response
 from rest_framework import filters
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import IsAuthenticated
-from django.shortcuts import get_object_or_404
 
 from Api import serializers
 from Api.models import Block, Configuration, DEFAULT_KEY_VALUES
@@ -57,6 +56,8 @@ class ShareView(viewsets.GenericViewSet,
             "miner": result.get("public_key"),
             "share": result.get("share"),
             "status": result.get("status"),
+            "transaction_id": result.get("tx_id"),
+            "block_height": result.get("headers_height"),
         }).json()
         headers = self.get_success_headers(serializer.data)
         return Response(response, status=status.HTTP_201_CREATED, headers=headers)

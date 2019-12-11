@@ -30,11 +30,11 @@ class ConfigurationManager(models.Manager):
         :return:
         """
         if attr in [key for (key, temp) in KEY_CHOICES]:
-            configurations = self.get_queryset().all()
-            if attr not in configurations.values_list('key', flat=True):
-                return DEFAULT_KEY_VALUES[attr]
+            configurations = dict(self.all().values_list('key', 'value'))
+            if attr in configurations:
+                return configurations[attr]
             else:
-                return self.get_queryset().get(key=attr).value
+                return DEFAULT_KEY_VALUES[attr]
         else:
             return super(ConfigurationManager, self).__getattribute__(attr)
 

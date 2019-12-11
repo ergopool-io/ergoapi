@@ -293,6 +293,6 @@ def validation_block(pk, w, n, d):
     response['status'] = 'solved' if left == right and flag == 1 else \
         ('valid' if left == right and flag == 2 else 'invalid')
     if response['status'] == 'solved':
-        response.update({'headersHeight': height})
+        response.update({'headers_height': height})
         response.update({'tx_id': tx_id})
     return response
