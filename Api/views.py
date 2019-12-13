@@ -12,7 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from Api import serializers
 from Api.models import Block, Configuration, DEFAULT_KEY_VALUES
-from Api.util import validation_proof, validation_block, node_request
+from Api.utils.general import General
 
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL", "http://127.0.0.1:8000")
 
@@ -41,25 +41,23 @@ class ShareView(viewsets.GenericViewSet,
     def get_queryset(self):
         return None
 
+    def perform_create(self, serializer):
+        pass
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         share = serializer.validated_data
-        result = validation_block(
-            pk=share.get("pk").lower(),
-            n=share.get("nonce"),
-            w=share.get("w"),
-            d=share.get("d")
-        )
         url = os.path.join(ACCOUNTING, "shares/")
         response = requests.post(url, json={
-            "miner": result.get("public_key"),
-            "share": result.get("share"),
-            "status": result.get("status"),
-            "transaction_id": result.get("tx_id"),
-            "block_height": result.get("headers_height"),
+            "miner": share.get("pk"),
+            "share": share.get("share"),
+            "status": share.get("status"),
+            "transaction_id": share.get("tx_id"),
+            "block_height": share.get("headers_height"),
         }).json()
         headers = self.get_success_headers(serializer.data)
+        print(response)
         return Response(response, status=status.HTTP_201_CREATED, headers=headers)
 
 
@@ -70,18 +68,8 @@ class HeaderView(viewsets.GenericViewSet,
     def get_queryset(self):
         return None
 
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.data
-        validation = validation_proof(
-            pk=data.get("pk").lower(),
-            msg_pre_image_base16=data.get("msg_pre_image"),
-            leaf=data.get("leaf"),
-            levels_encoded=data.get("levels")
-        )
-        headers = self.get_success_headers(serializer.data)
-        return Response(validation, status=status.HTTP_201_CREATED, headers=headers)
+    def perform_create(self, serializer):
+        pass
 
 
 class TransactionView(viewsets.GenericViewSet, mixins.CreateModelMixin):
@@ -156,7 +144,7 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet):
         for x in config.values_list('key', flat=True):
             result[x] = config.get(key=x).value
         reward = int(result['REWARD'] * result['REWARD_FACTOR'] * pow(10, 9))
-        data_node = node_request('wallet/addresses', {'accept': 'application/json', 'api_key': settings.API_KEY})
+        data_node = General.node_request('wallet/addresses', {'accept': 'application/json', 'api_key': settings.API_KEY})
         if data_node['status'] == 'External Error':
             return data_node
         else:
