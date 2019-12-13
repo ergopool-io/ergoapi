@@ -1,13 +1,41 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
-from Api.models import Configuration
+from Api.models import Configuration, Block
+from Api.utils.general import General
+
+from codecs import decode
+from ecpy.curves import Curve
+import struct
+import logging
 
 
-class ShareSerializer(serializers.Serializer):
+class ShareSerializer(serializers.Serializer, General):
     pk = serializers.CharField()
     nonce = serializers.CharField()
     d = serializers.CharField()
     w = serializers.CharField()
+    share = serializers.CharField(required=False, read_only=True)
+    status = serializers.CharField(required=False, read_only=True)
+    tx_id = serializers.CharField(required=False, read_only=True)
+    headers_height = serializers.CharField(required=False, read_only=True)
+
+    K = 32
+    # Number of elements in one solution
+    M = b''
+    # For convert m to 'flat map'
+    n = 26
+    # power of number of elements in a list
+    N = pow(2, n)
+    # Total number of elements
+    curve = Curve.get_curve('secp256k1')
+    ec_order = curve.order
+    ec_generator = curve.generator
+    # Create curve[Elliptic Curve Cryptography]
+    # Cyclic group 'ec_generator' of prime order 'ec_order' with fixed generator 'ec_generator' and identity element
+    # 'e.Secp256k1' elliptic curve
+    # is used for this purpose
+    valid_range = int(pow(2, 256) / ec_order) * ec_order
+    # biggest number <= 2^256 that is divisible by q without remainder
 
     def validate_d(self, value):
         try:
@@ -15,6 +43,149 @@ class ShareSerializer(serializers.Serializer):
         except:
             raise ValidationError("invalid number entered")
 
+    def __gen_indexes__(self, seed):
+        """
+        Algorithm 4
+        function that takes `m` and `nonceBytes` and returns a list of size `k` with numbers in [0,`N`)
+        :param seed:(Array Of Bytes)
+        :return: Sequence of int
+        """
+        hash_seed = self.blake(seed)
+
+        extended_hash = hash_seed + hash_seed[:3]
+        result = list(map(lambda i: struct.unpack('>I', extended_hash[i:i + 4])[0] % self.N, range(0, self.K)))
+        if len(result) == self.K:
+            return list(result)
+        logging.error("gen_indexes : The length of map not equal K")
+        raise Exception({'status': 'failed', 'message': 'gen_indexes : The length of map not equal K'})
+
+    def __hash_in__(self, array_byte):
+        """
+        Algorithm 3
+        One way cryptographic hash function that produces numbers in [0,ec_order) range.
+        It calculates blake2b256 hash of a provided input and checks whether the result is
+        in range from 0 to a maximum number divisible by ec_order without remainder.
+        If yes, it returns the result mod ec_order, otherwise make one more iteration using hash as an input.
+        This is done to ensure uniform distribution of the resulting numbers.
+
+        :param array_byte:(Array Of Bytes)
+        :return: (int) Go to overhead description
+        """
+        while True:
+            hashed = self.blake(array_byte)
+            bi = int.from_bytes(hashed, byteorder="big")
+            if bi < self.valid_range:
+                x = bi % self.ec_order
+                return x
+            array_byte = hashed
+
+    def __gen_element__(self, m, pk, w, index_bytes):
+        """
+        Generate element of Autolykos equation.
+
+        :param m:(Array Of Bytes)
+        :param pk:(Array Of Bytes)
+        :param w:(Array Of Bytes)
+        :param index_bytes:(Array Of Bytes)
+        :return: (int)
+        """
+        if self.M is b'':
+            for item in map(lambda i: struct.pack('>Q', i), range(0, 1024)):
+                self.M += item
+        return self.__hash_in__(index_bytes + self.M + pk + m + w)
+
+    def __ec_point__(self, array_byte):
+        """
+        The function decode_point from package ecpy.curves has bug, the size of the value that has been set in this
+        function is 34 but must be 33. To solve this problem, check first byte of array byte input
+        and according to this situation add byte 0 or 1 at the end of array byte input.
+
+        :param array_byte: w or p
+        :return: cast array byte to Ec-Point type
+        """
+        if array_byte[0] == 2:
+            return {'value': self.curve.decode_point(array_byte + decode('00', 'hex')), 'status': 'success'}
+        elif array_byte[0] == 3:
+            array_byte = b'\x02' + array_byte[1:]
+            return {'value': self.curve.decode_point(array_byte + decode('01', 'hex')), 'status': 'success'}
+        else:
+            logging.error("First bytes of w_bytes is invalid.")
+            raise Exception({'status': 'invalid', 'message': 'First bytes of w_bytes is invalid.'})
+
+    def __validate_difficulty__(self, d):
+        """
+        validate pool difficulty and base and d
+        :param d:(int) distance between pseudo-random number, corresponding to nonce `n` and a secret,
+                    corresponding to `pk`. The lower `d` is, the harder it was to find this solution.
+        :return: if d<b return 1 else if b<d<pb return 2 else return 0
+        """
+        # Send request to node for get base of network
+        data_node = self.node_request('mining/candidate', {'accept': 'application/json'})
+        base = data_node.get('response').get('b')
+        # Set POOL_DIFFICULTY
+        pool_difficulty = base * Configuration.objects.POOL_DIFFICULTY_FACTOR
+        # Compare difficulty and base and return
+        return 1 if d < base else (2 if base < d < pool_difficulty else 0)
+
+    def __validate_right_left__(self, message, nonce, p1, p2, d):
+        f = list()
+        for i in self.__gen_indexes__(message + nonce):
+            check = self.__gen_element__(message, p1, p2, struct.pack('>I', i))
+            f.append(check)
+        f = sum(f) % self.ec_order
+        pk_ec_point = self.__ec_point__(p1)
+        w_ec_point = self.__ec_point__(p2)
+        left = w_ec_point['value'].mul(f)
+        right = self.ec_generator.mul(d).add(pk_ec_point['value'])
+        return 1 if left == right else 0
+
+    def validate(self, attrs):
+        n = attrs['nonce']
+        pk = attrs['pk']
+        w = attrs['w']
+        d = attrs['d']
+
+        # Convert to array bytes
+        try:
+            nonce = decode(n, "hex")
+            p1 = decode(pk, "hex")
+            p2 = decode(w, "hex")
+        except ValueError as e:
+            logging.error(e)
+            logging.error("Type of input is invalid.")
+            # Generate uniq id for share
+            attrs.update({'share': self.blake(pk + n + w, 'hex'), 'status': "invalid"})
+            return attrs
+
+        try:
+            # Get information share(ex: Message(hash of header block), Transaction Id) from database
+            block = Block.objects.get(public_key=pk)
+            # Convert to array bytes
+            message = decode(block.msg, "hex")
+            # Transaction Id
+            tx_id = block.tx_id
+            # Generate uniq id for share
+            share_id = self.blake(message + nonce + p1 + p2, 'hex')
+        except Block.DoesNotExist:
+            raise ValidationError({'message': 'There isn\'t this public-key', 'status': 'failed'})
+        # Create response for share
+        response = {'share': share_id, 'status': ''}
+        # Validate solved or valid or invalid(d > pool difficulty)
+        flag = self.__validate_difficulty__(d)
+        # validate_right_left
+        validation = self.__validate_right_left__(message, nonce, p1, p2, d)
+        # Request to node for get headersHeight
+        data_node = self.node_request('info', {'accept': 'application/json'})
+        height = data_node.get('response').get('headersHeight')
+        # ValidateBlock
+        response['status'] = 'solved' if validation == 1 and flag == 1 else (
+            'valid' if validation == 1 and flag == 2 else 'invalid')
+        if response['status'] == 'solved':
+            response.update({'headers_height': height})
+            response.update({'tx_id': tx_id})
+        attrs.update(response)
+        return attrs
+
     def update(self, instance, validated_data):
         pass
 
@@ -22,7 +193,7 @@ class ShareSerializer(serializers.Serializer):
         pass
 
     class Meta:
-        fields = ['pk', 'nonce', 'd', 'w']
+        fields = ['pk', 'nonce', 'd', 'w', 'share', 'status', 'tx_id', 'headers_height']
 
 
 class ProofSerializer(serializers.Serializer):
@@ -30,6 +201,84 @@ class ProofSerializer(serializers.Serializer):
     msg_pre_image = serializers.CharField()
     leaf = serializers.CharField()
     levels = serializers.ListField(child=serializers.CharField())
+    message = serializers.CharField(required=False, read_only=True)
+    status = serializers.CharField(required=False, read_only=True)
+
+    def __merkle_proof__(self, leaf, levels_encoded, pk):
+        # tx_id is a "leaf" in a Merkle proof
+        tx_id = leaf
+        # Merkle proof element is encoded in the following way:
+        # - first, 1 byte showing whether COMPUTED value is on the right (1) or on the left (0)
+        # - second, 32 bytes of stored value
+        try:
+            levels = list(map(lambda le: [decode(le, "hex")[1:], decode(le, "hex")[0:1]], levels_encoded))
+        except ValueError as e:
+            logging.error(e)
+            logging.error("Type of input is invalid.")
+            raise Exception({'pk': pk, 'message': 'Type of input is invalid', 'status': 'failed'})
+        leaf_hash = General.blake(decode('00', "hex") + decode(tx_id, "hex"))
+        for level in levels:
+            if level[1] == decode('01', "hex"):
+                leaf_hash = General.blake(decode('01', "hex") + level[0] + leaf_hash)
+            elif level[1] == decode('00', "hex"):
+                leaf_hash = General.blake(decode('01', "hex") + leaf_hash + level[0])
+        return leaf_hash
+
+    def __validate_transaction_id__(self, pk, leaf):
+        try:
+            # Get information miner(ex: Transaction Id) from database
+            block = Block.objects.get(public_key=pk)
+            if not block.tx_id == leaf:
+                raise Exception({'pk': pk, 'message': 'The leaf is invalid.', 'status': 'failed'})
+        except Block.DoesNotExist:
+            raise Exception({'pk': pk, 'message': 'Transaction not generated.', 'status': 'failed'})
+
+    def validate(self, attrs):
+        """
+         Merkle roof is constructed by given leaf data, leaf hash sibling and also siblings for parent nodes. Using this
+         data, it is possible to compute nodes on the path to root hash, and the hash itself. The picture of a proof
+         given below. In the picture, "^^" is leaf data(to compute leaf hash from), "=" values are to be computed,
+         "*" values are to be stored.
+
+         ........= Root
+         ..... /  \
+         .... *   =
+         ....... / \
+         ...... *   =
+         ......... /.\
+         .........*   =
+         ............ ^^
+        :return: status of merkle_proof
+        """
+        msg_pre_image_base16 = attrs['msg_pre_image']
+        leaf = attrs['leaf']
+        pk = attrs['pk']
+        levels_encoded = attrs['levels']
+        self.__validate_transaction_id__(pk, leaf)
+        try:
+            msg_pre_image = decode(msg_pre_image_base16, "hex")
+        except ValueError as e:
+            logging.error(e)
+            logging.error("Type of input is invalid.")
+            raise ValidationError({'pk': pk, 'message': 'Type of input is invalid', 'status': 'failed'})
+
+        # hash of "msg_pre_image" (which is a header without PoW) should be equal to "msg"
+        msg = General.blake(msg_pre_image, 'hex')
+        # Transactions Merkle tree digest is in bytes 65-96 (inclusive) of the unproven header
+        txs_root = msg_pre_image[65:97]
+        # Create Merkle Proof
+        leaf_hash = self.__merkle_proof__(leaf, levels_encoded, pk)
+        # Validate_merkle
+        if leaf_hash == txs_root:
+            # if proof is valid create or update block(public key and message) in database
+            obj, created = Block.objects.get_or_create(public_key=pk)
+            obj.msg = msg
+            obj.save()
+            attrs.update({'message': 'The proof is valid.', 'status': 'success'})
+            return attrs
+        else:
+            attrs.update({'message': 'The proof is invalid.', 'status': 'invalid'})
+            return attrs
 
     def update(self, instance, validated_data):
         pass
@@ -38,7 +287,7 @@ class ProofSerializer(serializers.Serializer):
         pass
 
     class Meta:
-        fields = ['pk', 'msg_pre_image', 'leaf', 'levels']
+        fields = ['pk', 'msg_pre_image', 'leaf', 'levels', 'message', 'status']
 
 
 class TransactionSerializer(serializers.Serializer):
