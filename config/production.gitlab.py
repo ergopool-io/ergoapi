@@ -13,14 +13,14 @@ DATABASES = {
     }
 }
 # Allowed Hosts
-ALLOWED_HOSTS = [os.environ.get('HOST')]
+ALLOWED_HOSTS = []
 
 # Access url for accounting system
-ACCOUNTING_URL = "http://" + os.environ.get("ACCOUNTING")
+ACCOUNTING_URL = "http://accounting"
 
 
 # Address Node (ex: "http://127.0.0.1:9053/")
-NODE_ADDRESS = "http://%s:%s/" % (os.environ.get("NODE_HOST"), os.environ.get("NODE_PORT", "9052"))
+NODE_ADDRESS = "http://node:6052/"
 
 # Secret Key of Node(apiKey) (ex: "623f4e8e440007f45020afabbf56d8ba43144778757ea88497c794ad529a0433")
-API_KEY = os.environ.get("SECRET")
+API_KEY = 'secret'

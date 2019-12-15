@@ -6,8 +6,8 @@ stages:
 test:
   stage: test
   script:
-  # this configures Django application to use attached postgres database that is run on `postgres` host
   - cp config/production.gitlab.py ErgoApi/production.py
+  # this configures Django application to use attached postgres database that is run on `postgres` host
   - export DATABASE_URL=postgres://ergo:ergo:5432/ergo
   - apt-get update -qy
   - apt-get install -y python3-dev python3-pip
