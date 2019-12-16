@@ -1,4 +1,10 @@
-image: python:3.7
+image: "python:3.7"
+
+before_script:
+  - cp ErgoApi/production.py.sample ErgoApi/production.py
+  - apt-get update -qy
+  - apt-get install -y postgresql-11 postgresql-client-11 postgresql-contrib-11 sudo screen
+  - pip3 install -r requirements.txt
 
 stages:
   - test
@@ -6,10 +12,7 @@ stages:
 test:
   stage: test
   script:
-  - cp config/production.gitlab.py ErgoApi/production.py
-  # this configures Django application to use attached postgres database that is run on `postgres` host
-  - export DATABASE_URL=postgres://ergo:ergo:5432/ergo
-  - apt-get update -qy
-  - apt-get install -y python3-dev python3-pip
-  - pip3 install -r requirements.txt
+  - screen -dm sudo -u postgres /usr/lib/postgresql/11/bin/postgres -D /var/lib/postgresql/11/main -c config_file=/etc/postgresql/11/main/postgresql.conf
+  - sleep 3
+  - sudo -u postgres psql -c "CREATE USER ergo WITH PASSWORD 'ergo' SUPERUSER;"
   - python3 manage.py test
