@@ -14,7 +14,7 @@ from Api import serializers
 from Api.models import Block, Configuration, DEFAULT_KEY_VALUES
 from Api.utils.general import General
 
-ACCOUNTING = getattr(settings, "ACCOUNTING_URL", "http://127.0.0.1:8000")
+ACCOUNTING = getattr(settings, "ACCOUNTING_URL")
 
 
 class AccountView(View):
@@ -53,11 +53,11 @@ class ShareView(viewsets.GenericViewSet,
             "miner": share.get("pk"),
             "share": share.get("share"),
             "status": share.get("status"),
+            "difficulty": share.get("difficulty"),
             "transaction_id": share.get("tx_id"),
             "block_height": share.get("headers_height"),
         }).json()
         headers = self.get_success_headers(serializer.data)
-        print(response)
         return Response(response, status=status.HTTP_201_CREATED, headers=headers)
 
 
