@@ -14,7 +14,7 @@ class TestValidateProof(TransactionTestCase):
 
     def test_validate_proof(self):
         """
-                In this scenario we want to test the functionality of Configuration value API when
+        In this scenario we want to test the functionality of Configuration value API when
         it is called by a http 'get' or 'list' method.
         For the above purpose first we delete all object in database for that check if an object there isn't in the
          database set default value
@@ -62,7 +62,8 @@ def mocked_requests_get(*args, **kwargs):
             "b": 115792089237316195423570985008687907852837564279074904382605163141518161494337
         })
     elif args[0] == NODE_ADDRESS + 'info':
-        return MockResponse({"headersHeight": 41496})
+        return MockResponse({"headersHeight": 41496,
+                             "difficulty": 12345})
 
     elif args[0] == NODE_ADDRESS + 'wallet/addresses':
         return MockResponse(["3WvrVTCPJ1keSdtqNL5ayzQ62MmTNz4Rxq7vsjcXgLJBwZkvHrGa"])
@@ -120,6 +121,7 @@ class TestValidateBlock(TransactionTestCase):
                            "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406,
                            "share": "a1ae8ae3f9f9568fd90ac29009c18997d50829d1f7c0cd0bb500d930631f2065",
                            "status": "solved",
+                           "difficulty": 12345,
                            "headers_height": 41496,
                            "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"}
         block = ShareSerializer()
@@ -148,6 +150,7 @@ class TestValidateBlock(TransactionTestCase):
                            "nonce": "0000000000400ee0",
                            "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406,
                            "share": "63b681227e7a131e9afd7d860fe77cd75aa83de75cc2732b4d6d4c14a4675fbe",
+                           "difficulty": 12345,
                            "status": "invalid"}
 
         block = ShareSerializer()

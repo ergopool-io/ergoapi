@@ -14,6 +14,7 @@ class ShareSerializer(serializers.Serializer, General):
     nonce = serializers.CharField()
     d = serializers.CharField()
     w = serializers.CharField()
+    difficulty = serializers.IntegerField(required=False, read_only=True)
     share = serializers.CharField(required=False, read_only=True)
     status = serializers.CharField(required=False, read_only=True)
     tx_id = serializers.CharField(required=False, read_only=True)
@@ -168,15 +169,16 @@ class ShareSerializer(serializers.Serializer, General):
             share_id = self.blake(message + nonce + p1 + p2, 'hex')
         except Block.DoesNotExist:
             raise ValidationError({'message': 'There isn\'t this public-key', 'status': 'failed'})
+        # Request to node for get headersHeight
+        data_node = self.node_request('info', {'accept': 'application/json'})
+        height = data_node.get('response').get('headersHeight')
+        difficulty = data_node.get('response').get('difficulty')
         # Create response for share
-        response = {'share': share_id, 'status': ''}
+        response = {'share': share_id, 'status': '', 'difficulty':difficulty}
         # Validate solved or valid or invalid(d > pool difficulty)
         flag = self.__validate_difficulty__(d)
         # validate_right_left
         validation = self.__validate_right_left__(message, nonce, p1, p2, d)
-        # Request to node for get headersHeight
-        data_node = self.node_request('info', {'accept': 'application/json'})
-        height = data_node.get('response').get('headersHeight')
         # ValidateBlock
         response['status'] = 'solved' if validation == 1 and flag == 1 else (
             'valid' if validation == 1 and flag == 2 else 'invalid')
@@ -193,7 +195,7 @@ class ShareSerializer(serializers.Serializer, General):
         pass
 
     class Meta:
-        fields = ['pk', 'nonce', 'd', 'w', 'share', 'status', 'tx_id', 'headers_height']
+        fields = ['pk', 'nonce', 'd', 'w', 'share', 'difficulty', 'status', 'tx_id', 'headers_height']
 
 
 class ProofSerializer(serializers.Serializer):
