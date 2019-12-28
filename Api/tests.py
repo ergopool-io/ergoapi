@@ -9,6 +9,158 @@ from ErgoApi.settings import NODE_ADDRESS
 import struct
 
 
+class TransactionValidateApiTest(TransactionTestCase):
+    """
+    Test class for Validate Transaction API
+    This class has 2 test function:
+    1) using http 'post' method to validate a transaction that is valid.
+    2) using http 'post' method to validate a transaction that is invalid
+    """
+    reset_sequences = True
+
+    def mocked_node_request(*args, **kwargs):
+        """
+        mock function node_request for urls 'transactions/check', 'wallet/addresses' and 'utils/ergoTreeToAddress/'
+        """
+        if args[0] == "transactions/check":
+            return {
+                "status": "success",
+                "response": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7"
+            }
+        elif args[0] == "wallet/addresses":
+            return {
+                "status": "success",
+                "response": ["3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"]
+            }
+        elif "utils/ergoTreeToAddress/" in args[0]:
+            return {
+                "status": "success",
+                "response": {
+                    "address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"
+                }
+            }
+        return None
+
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_post_valid(self, mock):
+        """
+        In this scenario we want to test the functionality of Validate Transaction API when
+        it is called by a http "post" method.
+        we send a http "post" method for check transaction,
+        We expect that the status code of response be "201 ok" and output Transaction is valid
+        :return:
+        """
+        data_input = {
+            "pk": "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C",
+            "transaction": {
+                "id": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7",
+                "outputs": [
+                    {
+                        "value": 1000000000,
+                        "ergoTree": "0008cd027ae614dd724777fe9ead18d82f3c53f04de0525b46d235a74b04af694694485e"
+                    },
+                    {
+                        "value": 1000000,
+                        "ergoTree": "1005040004000e36100204a00b08cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ea02d192a39a8cc7a701730073011001020402d19683030193a38cc7b2a57300000193c2b2a57301007473027303830108cdeeac93b1a57304"
+                    },
+                    {
+                        "value": 216177000000,
+                        "ergoTree": "0008cd027ae614dd724777fe9ead18d82f3c53f04de0525b46d235a74b04af694694485e"
+                    }]
+            }
+        }
+        # response of API /api/transaction/ should be this
+        result = {
+            "message": "Transaction is valid"
+        }
+        # send a http "post" request to the configuration endpoint
+        response = self.client.post("/api/transaction/", data=data_input, content_type="application/json")
+        # check the status of the response
+        self.assertEqual(response.status_code, 201)
+        # check the content of the response
+        self.assertEqual(response.json(), result)
+
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_post_invalid_tx_id(self, mock):
+        """
+        In this scenario we want to test the functionality of Validate Transaction API when
+        it is called by a http "post" method.
+        we send a http "post" method for check transaction,
+        We expect that the status code of response be "400" and output Transaction is invalid because transaction id
+         in input not equal with response of api transactions/check .
+        :return:
+        """
+        data_input = {
+            "pk": "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C",
+            "transaction": {
+                "id": "a2713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7",
+                "outputs": [
+                    {
+                        "value": 1000000000,
+                        "ergoTree": "0008cd027ae614dd724777fe9ead18d82f3c53f04de0525b46d235a74b04af694694485e"
+                    },
+                    {
+                        "value": 1000000,
+                        "ergoTree": "1005040004000e36100204a00b08cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ea02d192a39a8cc7a701730073011001020402d19683030193a38cc7b2a57300000193c2b2a57301007473027303830108cdeeac93b1a57304"
+                    },
+                    {
+                        "value": 216177000000,
+                        "ergoTree": "0008cd027ae614dd724777fe9ead18d82f3c53f04de0525b46d235a74b04af694694485e"
+                    }]
+            }
+        }
+        # response of API /api/transaction/ should be this
+        result = {
+            "message": ["tx_id is invalid"]
+        }
+        # send a http "post" request to the Transaction Validate endpoint
+        response = self.client.post("/api/transaction/", data=data_input, content_type="application/json")
+        # check the status of the response
+        self.assertEqual(response.status_code, 400)
+        # check the content of the response
+        self.assertEqual(response.json(), result)
+
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_post_invalid_value_wallet_address(self, mock):
+        """
+        In this scenario we want to test the functionality of Validate Transaction API when
+        it is called by a http "post" method.
+        we send a http "post" method for check transaction,
+        We expect that the status code of response be "400" and output Transaction is invalid because sum of value
+         isn"t biggest than policy pool reward or wallet address is invalid.
+        :return:
+        """
+        data_input = {
+            "pk": "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C",
+            "transaction": {
+                "id": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7",
+                "outputs": [
+                    {
+                        "value": 10000000,
+                        "ergoTree": "0008cd027ae614dd724777fe9ead18d82f3c53f04de0525b46d235a74b04af694694485e"
+                    },
+                    {
+                        "value": 1000000,
+                        "ergoTree": "1005040004000e36100204a00b08cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ea02d192a39a8cc7a701730073011001020402d19683030193a38cc7b2a57300000193c2b2a57301007473027303830108cdeeac93b1a57304"
+                    },
+                    {
+                        "value": 21617700,
+                        "ergoTree": "0018cd027ae614dd724777fe9ead18d82f3c53f04de0525b46d235a74b04af694694485e"
+                    }]
+            }
+        }
+        # response of API /api/transaction/ should be this
+        result = {
+            "message": ["Wallet address pool or value of transaction is invalid"]
+        }
+        # send a http "post" request to the configuration endpoint
+        response = self.client.post("/api/transaction/", data=data_input, content_type="application/json")
+        # check the status of the response
+        self.assertEqual(response.status_code, 400)
+        # check the content of the response
+        self.assertEqual(response.json(), result)
+
+
 class TestValidateProof(TransactionTestCase):
     reset_sequences = True
 
@@ -25,54 +177,51 @@ class TestValidateProof(TransactionTestCase):
         """
         Block.objects.create(public_key="0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
                              tx_id="53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5")
-        proof_data = {"pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
-                      "msg_pre_image": "0146062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a4872011e52944ffdcd5e7f745ba14df4487ce8cf30f9b02a2be0c5a1096f8b612c190194448af0d8c9ae2170a7d970f621d18707dc4c2d5e9ec168adb1895e5cbbc555853afe04d0a87819523798e4db5f1b75fd43512cf76c5a3ce5eb8527725e12d1c3f9e0eb2db112e2d742dc71c6aa2df4b35fec85d8c28f6dc954796f3f95c308721e60cc9505016238dfbd02000000",
-                      "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
-                      "levels": [
-                            "01c9a7e42a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"
-                        ]}
+        proof_data = {
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "msg_pre_image": "0146062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a4872011e52944ffdcd5e7f745ba14df4487ce8cf30f9b02a2be0c5a1096f8b612c190194448af0d8c9ae2170a7d970f621d18707dc4c2d5e9ec168adb1895e5cbbc555853afe04d0a87819523798e4db5f1b75fd43512cf76c5a3ce5eb8527725e12d1c3f9e0eb2db112e2d742dc71c6aa2df4b35fec85d8c28f6dc954796f3f95c308721e60cc9505016238dfbd02000000",
+            "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
+            "levels": ["01c9a7e42a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"]
+        }
         result = {
-                "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
-                "msg_pre_image": "0146062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a4872011e52944ffdcd5e7f745ba14df4487ce8cf30f9b02a2be0c5a1096f8b612c190194448af0d8c9ae2170a7d970f621d18707dc4c2d5e9ec168adb1895e5cbbc555853afe04d0a87819523798e4db5f1b75fd43512cf76c5a3ce5eb8527725e12d1c3f9e0eb2db112e2d742dc71c6aa2df4b35fec85d8c28f6dc954796f3f95c308721e60cc9505016238dfbd02000000",
-                "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
-                "levels": [
-                    "01c9a7e42a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"
-                ],
-                "message": "The proof is valid.",
-                "status": "success"
-                }
-        # send a http 'post' request to the configuration endpoint
-        response = self.client.post('/api/header/', data=proof_data, content_type="application/json")
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "msg_pre_image": "0146062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a4872011e52944ffdcd5e7f745ba14df4487ce8cf30f9b02a2be0c5a1096f8b612c190194448af0d8c9ae2170a7d970f621d18707dc4c2d5e9ec168adb1895e5cbbc555853afe04d0a87819523798e4db5f1b75fd43512cf76c5a3ce5eb8527725e12d1c3f9e0eb2db112e2d742dc71c6aa2df4b35fec85d8c28f6dc954796f3f95c308721e60cc9505016238dfbd02000000",
+            "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
+            "levels": ["01c9a7e42a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"],
+            "message": "The proof is valid.",
+            "status": "success"
+        }
+        # send a http "post" request to the configuration endpoint
+        response = self.client.post("/api/header/", data=proof_data, content_type="application/json")
         # check the status of the response
         self.assertEqual(response.status_code, 201)
         # check the content of the response
         self.assertEqual(response.json(), result)
 
 
-def mocked_requests_get(*args, **kwargs):
-    class MockResponse:
-        def __init__(self, json_data):
-            self.json_data = json_data
-
-        def json(self):
-            return self.json_data
-
-    if args[0] == NODE_ADDRESS + 'mining/candidate':
-        return MockResponse({
-            "b": 115792089237316195423570985008687907852837564279074904382605163141518161494337
-        })
-    elif args[0] == NODE_ADDRESS + 'info':
-        return MockResponse({"headersHeight": 41496,
-                             "difficulty": 12345})
-
-    elif args[0] == NODE_ADDRESS + 'wallet/addresses':
-        return MockResponse(["3WvrVTCPJ1keSdtqNL5ayzQ62MmTNz4Rxq7vsjcXgLJBwZkvHrGa"])
-
-    return MockResponse(None)
-
-
 class TestValidateBlock(TransactionTestCase):
     reset_sequences = True
+    
+    def mocked_node_request(*args, **kwargs):
+        """
+        mock function node_request for urls 'mining/candidate and 'info'
+        """
+        if args[0] == "mining/candidate":
+            return {
+                "status": "success", 
+                "response": {
+                    "b": 115792089237316195423570985008687907852837564279074904382605163141518161494337
+                }
+            }
+        elif args[0] == "info":
+            return {
+                "status": "success",
+                "response": {
+                    "headersHeight": 41496,
+                    "difficulty": 12345
+                }
+            }
+        return None
 
     def test_gen_indexes(self):
         """
@@ -83,7 +232,7 @@ class TestValidateBlock(TransactionTestCase):
         block = ShareSerializer()
         output = block.__gen_indexes__(msg + nonce)
         self.assertEqual(output, [54118084, 29803733, 46454084, 13976688, 21262480, 7376957, 9452803, 3998647, 17020853,
-                                  62371271, 62244663, 29833011, 53949362, 53719676, 62029037,41741671, 15558442,
+                                  62371271, 62244663, 29833011, 53949362, 53719676, 62029037, 41741671, 15558442,
                                   23538307, 53117732, 42149055, 52740024, 12564581, 62416135, 6620933, 17237427,
                                   50705181, 28515596, 52235322, 17578593, 3826135, 39966521, 30882246])
 
@@ -96,11 +245,11 @@ class TestValidateBlock(TransactionTestCase):
         p2 = "02600D9BEEE35425E5C467A4295D49EDAEF15E22C8B2EF7E916A9BE30EC7DA3B65".encode("ascii")
         out_gen_indexes = 54118084
         block = ShareSerializer()
-        output = block.__gen_element__(msg, p1, p2, struct.pack('>I', out_gen_indexes))
+        output = block.__gen_element__(msg, p1, p2, struct.pack(">I", out_gen_indexes))
         self.assertEqual(output, 1442183731460476782005370820367939156210879287829514232459313282341328232038)
 
-    @patch('requests.get', side_effect=mocked_requests_get)
-    def test_validate_block_lesX(self, mock_get):
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_validate_block_lesX(self, mock):
         """
         Solution
         Check that d < b and left == right for a share solved.
@@ -115,22 +264,24 @@ class TestValidateBlock(TransactionTestCase):
             "nonce": "0000000000400ae0",
             "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406
         }
-        result_validate = {"pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
-                           "w": "03b783831ab40435c02bf0b3225890540b9689db3c93d4b0bdb32e5a837f281438",
-                           "nonce": "0000000000400ae0",
-                           "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406,
-                           "share": "a1ae8ae3f9f9568fd90ac29009c18997d50829d1f7c0cd0bb500d930631f2065",
-                           "status": "solved",
-                           "difficulty": 12345,
-                           "headers_height": 41496,
-                           "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"}
+        result_validate = {
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "w": "03b783831ab40435c02bf0b3225890540b9689db3c93d4b0bdb32e5a837f281438",
+            "nonce": "0000000000400ae0",
+            "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406,
+            "share": "a1ae8ae3f9f9568fd90ac29009c18997d50829d1f7c0cd0bb500d930631f2065",
+            "status": "solved",
+            "difficulty": 12345,
+            "headers_height": 41496,
+            "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"
+        }
         block = ShareSerializer()
         response = block.validate(share)
         self.assertEqual(response, result_validate)
 
-    @patch('ErgoApi.settings')
-    @patch('requests.get', side_effect=mocked_requests_get)
-    def test_validate_block_invalid(self, mock_get, mock_setting):
+    @patch("ErgoApi.settings")
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_validate_block_invalid(self, mock, mock_setting):
         """
          Solution
          Check that d > POOL_DIFFICULTY or left =! right for a share invalid.
@@ -140,18 +291,20 @@ class TestValidateBlock(TransactionTestCase):
                              msg="f548e38f716e90f52078880c7cdc5a81e27676b26b9b9251b5539e6b1df2ffb5",
                              tx_id="53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5")
 
-        share = {"pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
-                 "w": "03b783831ab40435c02bf0b3225890540b9689db3c93d4b0bdb32e5a837f281438",
-                 "nonce": "0000000000400ee0",
-                 "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406
-                 }
-        result_validate = {"pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
-                           "w": "03b783831ab40435c02bf0b3225890540b9689db3c93d4b0bdb32e5a837f281438",
-                           "nonce": "0000000000400ee0",
-                           "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406,
-                           "share": "63b681227e7a131e9afd7d860fe77cd75aa83de75cc2732b4d6d4c14a4675fbe",
-                           "difficulty": 12345,
-                           "status": "invalid"}
+        share = {
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "w": "03b783831ab40435c02bf0b3225890540b9689db3c93d4b0bdb32e5a837f281438",
+            "nonce": "0000000000400ee0",
+            "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406
+        }
+        result_validate = {
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "w": "03b783831ab40435c02bf0b3225890540b9689db3c93d4b0bdb32e5a837f281438",
+            "nonce": "0000000000400ee0",
+            "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406,
+            "share": "63b681227e7a131e9afd7d860fe77cd75aa83de75cc2732b4d6d4c14a4675fbe",
+            "difficulty": 12345, "status": "invalid"
+        }
 
         block = ShareSerializer()
         response = block.validate(share)
@@ -166,6 +319,7 @@ class ConfigurationManageApiTest(TestCase):
     2) using http 'post' method to create a new configuration
     3) using http 'post' method to update an existing configuration
     """
+
     def setUp(self):
         self.factory = RequestFactory()
         User.objects.create_user(username='test', password='test')
@@ -271,8 +425,19 @@ class ConfigurationValueApiTest(TransactionTestCase):
     """
     reset_sequences = True
 
-    @patch('requests.get', side_effect=mocked_requests_get)
-    def test_configuration_api_get_method_list_with_default(self, mock_get):
+    def mocked_node_request(*args, **kwargs):
+        """
+        mock function node_request for urls wallet/addresses'
+        """
+        if args[0] == "wallet/addresses":
+            return {
+                "status": "success",
+                "response": ["3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"]
+            }
+        return None
+
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_configuration_api_get_method_list_with_default(self, mock):
         """
         In this scenario we want to test the functionality of Configuration value API when
         it is called by a http 'get' or 'list' method.
@@ -288,9 +453,9 @@ class ConfigurationValueApiTest(TransactionTestCase):
         # response of API /config/value should be this
         result = {
             "reward": int(DEFAULT_KEY_VALUES['REWARD'] * DEFAULT_KEY_VALUES['REWARD_FACTOR'] * pow(10, 9)),
-            "wallet_address": "3WvrVTCPJ1keSdtqNL5ayzQ62MmTNz4Rxq7vsjcXgLJBwZkvHrGa",
+            "wallet_address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM",
             "pool_difficulty_factor": DEFAULT_KEY_VALUES['POOL_DIFFICULTY_FACTOR']
-            }
+        }
         # send a http 'get' request to the configuration endpoint
         response = self.client.get('/api/config/value/')
         # check the status of the response
@@ -298,8 +463,8 @@ class ConfigurationValueApiTest(TransactionTestCase):
         # check the content of the response
         self.assertEqual(response.json(), result)
 
-    @patch('requests.get', side_effect=mocked_requests_get)
-    def test_configuration_api_get_method_list(self, mock_get):
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_configuration_api_get_method_list(self, mock):
         """
         In this scenario we want to test the functionality of Configuration API when
         it is called by a http 'get' method.
@@ -316,9 +481,9 @@ class ConfigurationValueApiTest(TransactionTestCase):
         # response of API /config/value should be this
         result = {
             "reward": 40 * 1 * pow(10, 9),
-            "wallet_address": "3WvrVTCPJ1keSdtqNL5ayzQ62MmTNz4Rxq7vsjcXgLJBwZkvHrGa",
+            "wallet_address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM",
             "pool_difficulty_factor": 1
-            }
+        }
 
         # send a http 'get' request to the configuration endpoint
         response = self.client.get('/api/config/value/')
