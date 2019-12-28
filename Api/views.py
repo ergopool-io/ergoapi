@@ -78,18 +78,21 @@ class TransactionView(viewsets.GenericViewSet, mixins.CreateModelMixin):
     def get_queryset(self):
         return None
 
+    def perform_create(self, serializer):
+        pass
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        pk = serializer.validated_data.get('pk', "")
-        transaction = serializer.validated_data.get('transaction', {})
-        block = Block.objects.filter(public_key=pk).first()
-        if not block:
-            block = Block(public_key=pk)
-        block.tx_id = transaction.get("id")
-        block.save()
+        share = serializer.validated_data
         headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        # Check if block would have existed update tx_id else set public_key of miner then set tx_id.
+        block = Block.objects.filter(public_key=share.get("pk")).first()
+        if not block:
+            block = Block(public_key=share.get("pk"))
+        block.tx_id = share.get("tx_id")
+        block.save()
+        return Response({'message': share.get("message")}, status=status.HTTP_201_CREATED, headers=headers)
 
 
 class ConfigurationViewSet(viewsets.GenericViewSet,
@@ -145,7 +148,7 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet):
             result[x] = config.get(key=x).value
         reward = int(result['REWARD'] * result['REWARD_FACTOR'] * pow(10, 9))
         data_node = General.node_request('wallet/addresses', {'accept': 'application/json', 'api_key': settings.API_KEY})
-        if data_node['status'] == 'External Error':
+        if data_node['status'] == '400':
             return data_node
         else:
             wallet_address = data_node.get('response')[0]
