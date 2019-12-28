@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework import filters
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import IsAuthenticated
+import logging
 
 from Api import serializers
 from Api.models import Block, Configuration, DEFAULT_KEY_VALUES
@@ -157,3 +158,37 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet):
             'wallet_address': wallet_address,
             'pool_difficulty_factor': result['POOL_DIFFICULTY_FACTOR']
         })
+
+
+class DashboardView(viewsets.GenericViewSet,
+                    mixins.ListModelMixin,
+                    mixins.RetrieveModelMixin):
+
+    def get_queryset(self):
+        return None
+
+    def list(self, request, *args, **kwargs):
+        return self.get_response(request)
+
+    def retrieve(self, request, *args, **kwargs):
+        return self.get_response(request, kwargs.get("pk").lower())
+
+    def get_response(self, request, pk=None):
+        """
+        Returns information for this round of shares.
+        In the response, there is total shares count of this round and information about each miner balances.
+        If the pk is set in url parameters, then information is just about that miner.
+        :param request:
+        :param pk:
+        :return:
+        """
+        url = os.path.join(ACCOUNTING, "dashboard/")
+        try:
+            response = requests.get(url+pk).json() if pk else requests.get(url).json()
+            return Response(response, status=status.HTTP_200_OK)
+        except requests.exceptions.RequestException as e:
+            logging.error(e)
+            logging.error("Can not resolve response from Accounting")
+            response = {'message': "Internal Server Error"}
+            return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
