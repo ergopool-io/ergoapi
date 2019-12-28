@@ -11,6 +11,7 @@ router.register(r'header', views.HeaderView, basename='Header')
 router.register(r'transaction', views.TransactionView, basename='Transaction')
 router.register(r'config/manage', views.ConfigurationViewSet, basename='Config Manage')
 router.register(r'config/value', views.ConfigurationValueViewSet, basename='Config Value')
+router.register(r'dashboard', views.DashboardView, basename='Dashboard')
 
 
 urlpatterns = [
