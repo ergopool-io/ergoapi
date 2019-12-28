@@ -5,7 +5,6 @@ from unittest.mock import patch
 from Api.models import Block, KEY_CHOICES, Configuration, DEFAULT_KEY_VALUES
 from django.contrib.auth.models import User
 from Api.serializers import ShareSerializer
-from ErgoApi.settings import NODE_ADDRESS
 import struct
 
 
@@ -206,19 +205,12 @@ class TestValidateBlock(TransactionTestCase):
         """
         mock function node_request for urls 'mining/candidate and 'info'
         """
-        if args[0] == "mining/candidate":
-            return {
-                "status": "success", 
-                "response": {
-                    "b": 115792089237316195423570985008687907852837564279074904382605163141518161494337
-                }
-            }
-        elif args[0] == "info":
+        if args[0] == "info":
             return {
                 "status": "success",
                 "response": {
                     "headersHeight": 41496,
-                    "difficulty": 12345
+                    "difficulty": 1
                 }
             }
         return None
@@ -264,6 +256,7 @@ class TestValidateBlock(TransactionTestCase):
             "nonce": "0000000000400ae0",
             "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406
         }
+
         result_validate = {
             "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
             "w": "03b783831ab40435c02bf0b3225890540b9689db3c93d4b0bdb32e5a837f281438",
@@ -271,7 +264,7 @@ class TestValidateBlock(TransactionTestCase):
             "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406,
             "share": "a1ae8ae3f9f9568fd90ac29009c18997d50829d1f7c0cd0bb500d930631f2065",
             "status": "solved",
-            "difficulty": 12345,
+            "difficulty": 1,
             "headers_height": 41496,
             "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"
         }
@@ -303,7 +296,8 @@ class TestValidateBlock(TransactionTestCase):
             "nonce": "0000000000400ee0",
             "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406,
             "share": "63b681227e7a131e9afd7d860fe77cd75aa83de75cc2732b4d6d4c14a4675fbe",
-            "difficulty": 12345, "status": "invalid"
+            "difficulty": 1,
+            "status": "invalid"
         }
 
         block = ShareSerializer()

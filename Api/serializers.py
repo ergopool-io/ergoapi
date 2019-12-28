@@ -46,6 +46,14 @@ class ShareSerializer(serializers.Serializer, General):
         except:
             raise ValidationError("invalid number entered")
 
+    def __get_base__(self, difficulty):
+        """
+        convert difficulty to base of network with division order of elliptic curve to difficulty
+        :param difficulty: difficulty of network
+        :return: base
+        """
+        return self.ec_order / difficulty
+
     def __gen_indexes__(self, seed):
         """
         Algorithm 4
@@ -121,16 +129,16 @@ class ShareSerializer(serializers.Serializer, General):
                 'message': 'First bytes of w_bytes is invalid.'
             })
 
-    def __validate_difficulty__(self, d):
+    def __validate_difficulty__(self, d, difficulty):
         """
         validate pool difficulty and base and d
         :param d:(int) distance between pseudo-random number, corresponding to nonce `n` and a secret,
                     corresponding to `pk`. The lower `d` is, the harder it was to find this solution.
+        :param difficulty:(int) difficulty of network
         :return: if d<b return 1 else if b<d<pb return 2 else return 0
         """
-        # Send request to node for get base of network
-        data_node = self.node_request('mining/candidate', {'accept': 'application/json'})
-        base = data_node.get('response').get('b')
+        # Convert difficulty to base
+        base = self.__get_base__(difficulty)
         # Set POOL_DIFFICULTY
         pool_difficulty = base * Configuration.objects.POOL_DIFFICULTY_FACTOR
         # Compare difficulty and base and return
@@ -194,7 +202,7 @@ class ShareSerializer(serializers.Serializer, General):
             'difficulty': difficulty
         }
         # Validate solved or valid or invalid(d > pool difficulty)
-        flag = self.__validate_difficulty__(d)
+        flag = self.__validate_difficulty__(d, difficulty)
         # validate_right_left
         validation = self.__validate_right_left__(message, nonce, p1, p2, d)
         # ValidateBlock
@@ -352,7 +360,7 @@ class TransactionSerializer(serializers.Serializer, General):
         # Send request to node for validate transaction
         data_node = self.node_request('transactions/check',
                                       {'accept': 'application/json', 'content-type': 'application/json'},
-                                      data=transaction, type_request="post")
+                                      data=transaction, request_type="post")
         if data_node['status'] == 'External Error':
             raise ValidationError({"message": data_node['response']})
         else:
