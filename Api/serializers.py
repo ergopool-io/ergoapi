@@ -2,6 +2,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from Api.models import Configuration, Block
 from Api.utils.general import General
+from ErgoApi.settings import API_KEY
 
 from codecs import decode
 from ecpy.curves import Curve
@@ -14,6 +15,7 @@ class ShareSerializer(serializers.Serializer, General):
     nonce = serializers.CharField()
     d = serializers.CharField()
     w = serializers.CharField()
+    difficulty = serializers.IntegerField(required=False, read_only=True)
     share = serializers.CharField(required=False, read_only=True)
     status = serializers.CharField(required=False, read_only=True)
     tx_id = serializers.CharField(required=False, read_only=True)
@@ -35,6 +37,7 @@ class ShareSerializer(serializers.Serializer, General):
     # 'e.Secp256k1' elliptic curve
     # is used for this purpose
     valid_range = int(pow(2, 256) / ec_order) * ec_order
+
     # biggest number <= 2^256 that is divisible by q without remainder
 
     def validate_d(self, value):
@@ -42,6 +45,14 @@ class ShareSerializer(serializers.Serializer, General):
             return int(value)
         except:
             raise ValidationError("invalid number entered")
+
+    def __get_base__(self, difficulty):
+        """
+        convert difficulty to base of network with division order of elliptic curve to difficulty
+        :param difficulty: difficulty of network
+        :return: base
+        """
+        return self.ec_order / difficulty
 
     def __gen_indexes__(self, seed):
         """
@@ -57,7 +68,10 @@ class ShareSerializer(serializers.Serializer, General):
         if len(result) == self.K:
             return list(result)
         logging.error("gen_indexes : The length of map not equal K")
-        raise Exception({'status': 'failed', 'message': 'gen_indexes : The length of map not equal K'})
+        raise Exception({
+            'status': 'failed',
+            'message': 'gen_indexes : The length of map not equal K'
+        })
 
     def __hash_in__(self, array_byte):
         """
@@ -110,18 +124,21 @@ class ShareSerializer(serializers.Serializer, General):
             return {'value': self.curve.decode_point(array_byte + decode('01', 'hex')), 'status': 'success'}
         else:
             logging.error("First bytes of w_bytes is invalid.")
-            raise Exception({'status': 'invalid', 'message': 'First bytes of w_bytes is invalid.'})
+            raise Exception({
+                'status': 'invalid',
+                'message': 'First bytes of w_bytes is invalid.'
+            })
 
-    def __validate_difficulty__(self, d):
+    def __validate_difficulty__(self, d, difficulty):
         """
         validate pool difficulty and base and d
         :param d:(int) distance between pseudo-random number, corresponding to nonce `n` and a secret,
                     corresponding to `pk`. The lower `d` is, the harder it was to find this solution.
+        :param difficulty:(int) difficulty of network
         :return: if d<b return 1 else if b<d<pb return 2 else return 0
         """
-        # Send request to node for get base of network
-        data_node = self.node_request('mining/candidate', {'accept': 'application/json'})
-        base = data_node.get('response').get('b')
+        # Convert difficulty to base
+        base = self.__get_base__(difficulty)
         # Set POOL_DIFFICULTY
         pool_difficulty = base * Configuration.objects.POOL_DIFFICULTY_FACTOR
         # Compare difficulty and base and return
@@ -154,7 +171,10 @@ class ShareSerializer(serializers.Serializer, General):
             logging.error(e)
             logging.error("Type of input is invalid.")
             # Generate uniq id for share
-            attrs.update({'share': self.blake(pk + n + w, 'hex'), 'status': "invalid"})
+            attrs.update({
+                'share': self.blake(pk + n + w, 'hex'),
+                'status': "invalid"
+            })
             return attrs
 
         try:
@@ -167,16 +187,24 @@ class ShareSerializer(serializers.Serializer, General):
             # Generate uniq id for share
             share_id = self.blake(message + nonce + p1 + p2, 'hex')
         except Block.DoesNotExist:
-            raise ValidationError({'message': 'There isn\'t this public-key', 'status': 'failed'})
-        # Create response for share
-        response = {'share': share_id, 'status': ''}
-        # Validate solved or valid or invalid(d > pool difficulty)
-        flag = self.__validate_difficulty__(d)
-        # validate_right_left
-        validation = self.__validate_right_left__(message, nonce, p1, p2, d)
+            raise ValidationError({
+                'message': 'There isn\'t this public-key',
+                'status': 'failed'
+            })
         # Request to node for get headersHeight
         data_node = self.node_request('info', {'accept': 'application/json'})
         height = data_node.get('response').get('headersHeight')
+        difficulty = data_node.get('response').get('difficulty')
+        # Create response for share
+        response = {
+            'share': share_id,
+            'status': '',
+            'difficulty': difficulty
+        }
+        # Validate solved or valid or invalid(d > pool difficulty)
+        flag = self.__validate_difficulty__(d, difficulty)
+        # validate_right_left
+        validation = self.__validate_right_left__(message, nonce, p1, p2, d)
         # ValidateBlock
         response['status'] = 'solved' if validation == 1 and flag == 1 else (
             'valid' if validation == 1 and flag == 2 else 'invalid')
@@ -193,7 +221,7 @@ class ShareSerializer(serializers.Serializer, General):
         pass
 
     class Meta:
-        fields = ['pk', 'nonce', 'd', 'w', 'share', 'status', 'tx_id', 'headers_height']
+        fields = ['pk', 'nonce', 'd', 'w', 'share', 'difficulty', 'status', 'tx_id', 'headers_height']
 
 
 class ProofSerializer(serializers.Serializer):
@@ -215,7 +243,11 @@ class ProofSerializer(serializers.Serializer):
         except ValueError as e:
             logging.error(e)
             logging.error("Type of input is invalid.")
-            raise Exception({'pk': pk, 'message': 'Type of input is invalid', 'status': 'failed'})
+            raise Exception({
+                'pk': pk,
+                'message': 'Type of input is invalid',
+                'status': 'failed'
+            })
         leaf_hash = General.blake(decode('00', "hex") + decode(tx_id, "hex"))
         for level in levels:
             if level[1] == decode('01', "hex"):
@@ -229,9 +261,17 @@ class ProofSerializer(serializers.Serializer):
             # Get information miner(ex: Transaction Id) from database
             block = Block.objects.get(public_key=pk)
             if not block.tx_id == leaf:
-                raise Exception({'pk': pk, 'message': 'The leaf is invalid.', 'status': 'failed'})
+                raise Exception({
+                    'pk': pk,
+                    'message': 'The leaf is invalid.',
+                    'status': 'failed'
+                })
         except Block.DoesNotExist:
-            raise Exception({'pk': pk, 'message': 'Transaction not generated.', 'status': 'failed'})
+            raise Exception({
+                'pk': pk,
+                'message': 'Transaction not generated.',
+                'status': 'failed'
+            })
 
     def validate(self, attrs):
         """
@@ -260,7 +300,11 @@ class ProofSerializer(serializers.Serializer):
         except ValueError as e:
             logging.error(e)
             logging.error("Type of input is invalid.")
-            raise ValidationError({'pk': pk, 'message': 'Type of input is invalid', 'status': 'failed'})
+            raise ValidationError({
+                'pk': pk,
+                'message': 'Type of input is invalid',
+                'status': 'failed'
+            })
 
         # hash of "msg_pre_image" (which is a header without PoW) should be equal to "msg"
         msg = General.blake(msg_pre_image, 'hex')
@@ -274,10 +318,16 @@ class ProofSerializer(serializers.Serializer):
             obj, created = Block.objects.get_or_create(public_key=pk)
             obj.msg = msg
             obj.save()
-            attrs.update({'message': 'The proof is valid.', 'status': 'success'})
+            attrs.update({
+                'message': 'The proof is valid.',
+                'status': 'success'
+            })
             return attrs
         else:
-            attrs.update({'message': 'The proof is invalid.', 'status': 'invalid'})
+            attrs.update({
+                'message': 'The proof is invalid.',
+                'status': 'invalid'
+            })
             return attrs
 
     def update(self, instance, validated_data):
@@ -290,9 +340,60 @@ class ProofSerializer(serializers.Serializer):
         fields = ['pk', 'msg_pre_image', 'leaf', 'levels', 'message', 'status']
 
 
-class TransactionSerializer(serializers.Serializer):
+class TransactionSerializer(serializers.Serializer, General):
     pk = serializers.CharField()
     transaction = serializers.JSONField()
+    status = serializers.CharField(required=False, read_only=True)
+    message = serializers.CharField(required=False, read_only=True)
+    tx_id = serializers.CharField(required=False, read_only=True)
+
+    def validate(self, attrs):
+        """
+        Validate transaction with request to node and check tx_id response of transactions/check with tx_id in
+         transaction json then get ergo_tree from output field and convert to address wallet and check with wallet
+         addresses in the event that wallet address was true check sum value of output field that be greater than reward.
+        :return: status of transaction
+        """
+        response = {'message': '', 'tx_id': ''}
+        transaction = attrs['transaction']
+        attrs['transaction'] = ''
+        # Send request to node for validate transaction
+        data_node = self.node_request('transactions/check',
+                                      {'accept': 'application/json', 'content-type': 'application/json'},
+                                      data=transaction, request_type="post")
+        if data_node['status'] == 'External Error':
+            raise ValidationError({"message": data_node['response']})
+        else:
+            tx_id = data_node.get('response')
+            response['tx_id'] = tx_id
+            if tx_id == transaction['id']:
+                # Send request to node for get list of wallet addresses
+                data_node = self.node_request('wallet/addresses',
+                                              {'accept': 'application/json', 'content-type': 'application/json',
+                                               'api_key': API_KEY})
+                if data_node['status'] == 'External Error':
+                    raise ValidationError({"message": data_node['response']})
+                else:
+                    wallet_address = data_node.get('response')
+                    value = 0
+                    for output in transaction['outputs']:
+                        # Send request to node for Generate Ergo address from hex-encoded ErgoTree
+                        data_node = self.node_request('utils/ergoTreeToAddress/' + output['ergoTree'],
+                                                      {'accept': 'application/json'})
+                        if data_node['status'] == 'External Error':
+                            raise ValidationError({"message": data_node['response']})
+                        # Check address after convert ergo tree that would have existed in the wallet_address
+                        elif data_node.get('response')['address'] in wallet_address:
+                                value = value + output['value']
+                    # Sum value of output field should be bigger than reward policy pool.
+                    if value >= Configuration.objects.REWARD * Configuration.objects.REWARD_FACTOR * pow(10, 9):
+                        response['message'] = "Transaction is valid"
+                    else:
+                        raise ValidationError({"message": ["Wallet address pool or value of transaction is invalid"]})
+            else:
+                raise ValidationError({'message': 'tx_id is invalid'})
+        attrs.update(response)
+        return attrs
 
     def update(self, instance, validated_data):
         pass
@@ -301,7 +402,7 @@ class TransactionSerializer(serializers.Serializer):
         pass
 
     class Meta:
-        fields = ['pk', 'transaction']
+        fields = ['pk', 'transaction', 'status', 'tx_id', 'message']
 
 
 class ConfigurationSerializer(serializers.ModelSerializer):

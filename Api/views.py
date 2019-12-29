@@ -9,12 +9,13 @@ from rest_framework.response import Response
 from rest_framework import filters
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import IsAuthenticated
+import logging
 
 from Api import serializers
 from Api.models import Block, Configuration, DEFAULT_KEY_VALUES
 from Api.utils.general import General
 
-ACCOUNTING = getattr(settings, "ACCOUNTING_URL", "http://127.0.0.1:8000")
+ACCOUNTING = getattr(settings, "ACCOUNTING_URL")
 
 
 class AccountView(View):
@@ -53,11 +54,11 @@ class ShareView(viewsets.GenericViewSet,
             "miner": share.get("pk"),
             "share": share.get("share"),
             "status": share.get("status"),
+            "difficulty": share.get("difficulty"),
             "transaction_id": share.get("tx_id"),
             "block_height": share.get("headers_height"),
         }).json()
         headers = self.get_success_headers(serializer.data)
-        print(response)
         return Response(response, status=status.HTTP_201_CREATED, headers=headers)
 
 
@@ -78,18 +79,21 @@ class TransactionView(viewsets.GenericViewSet, mixins.CreateModelMixin):
     def get_queryset(self):
         return None
 
+    def perform_create(self, serializer):
+        pass
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        pk = serializer.validated_data.get('pk', "")
-        transaction = serializer.validated_data.get('transaction', {})
-        block = Block.objects.filter(public_key=pk).first()
-        if not block:
-            block = Block(public_key=pk)
-        block.tx_id = transaction.get("id")
-        block.save()
+        share = serializer.validated_data
         headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        # Check if block would have existed update tx_id else set public_key of miner then set tx_id.
+        block = Block.objects.filter(public_key=share.get("pk")).first()
+        if not block:
+            block = Block(public_key=share.get("pk"))
+        block.tx_id = share.get("tx_id")
+        block.save()
+        return Response({'message': share.get("message")}, status=status.HTTP_201_CREATED, headers=headers)
 
 
 class ConfigurationViewSet(viewsets.GenericViewSet,
@@ -145,7 +149,7 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet):
             result[x] = config.get(key=x).value
         reward = int(result['REWARD'] * result['REWARD_FACTOR'] * pow(10, 9))
         data_node = General.node_request('wallet/addresses', {'accept': 'application/json', 'api_key': settings.API_KEY})
-        if data_node['status'] == 'External Error':
+        if data_node['status'] == '400':
             return data_node
         else:
             wallet_address = data_node.get('response')[0]
@@ -154,3 +158,37 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet):
             'wallet_address': wallet_address,
             'pool_difficulty_factor': result['POOL_DIFFICULTY_FACTOR']
         })
+
+
+class DashboardView(viewsets.GenericViewSet,
+                    mixins.ListModelMixin,
+                    mixins.RetrieveModelMixin):
+
+    def get_queryset(self):
+        return None
+
+    def list(self, request, *args, **kwargs):
+        return self.get_response(request)
+
+    def retrieve(self, request, *args, **kwargs):
+        return self.get_response(request, kwargs.get("pk").lower())
+
+    def get_response(self, request, pk=None):
+        """
+        Returns information for this round of shares.
+        In the response, there is total shares count of this round and information about each miner balances.
+        If the pk is set in url parameters, then information is just about that miner.
+        :param request:
+        :param pk:
+        :return:
+        """
+        url = os.path.join(ACCOUNTING, "dashboard/")
+        try:
+            response = requests.get(url+pk).json() if pk else requests.get(url).json()
+            return Response(response, status=status.HTTP_200_OK)
+        except requests.exceptions.RequestException as e:
+            logging.error(e)
+            logging.error("Can not resolve response from Accounting")
+            response = {'message': "Internal Server Error"}
+            return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
