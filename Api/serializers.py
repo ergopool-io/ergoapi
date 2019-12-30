@@ -9,6 +9,8 @@ from ecpy.curves import Curve
 import struct
 import logging
 
+logger = logging.getLogger(__name__)
+
 
 class ShareSerializer(serializers.Serializer, General):
     pk = serializers.CharField()
@@ -62,12 +64,11 @@ class ShareSerializer(serializers.Serializer, General):
         :return: Sequence of int
         """
         hash_seed = self.blake(seed)
-
         extended_hash = hash_seed + hash_seed[:3]
         result = list(map(lambda i: struct.unpack('>I', extended_hash[i:i + 4])[0] % self.N, range(0, self.K)))
         if len(result) == self.K:
             return list(result)
-        logging.error("gen_indexes : The length of map not equal K")
+        logger.error('Length of map does not equal K.')
         raise Exception({
             'status': 'failed',
             'message': 'gen_indexes : The length of map not equal K'
@@ -123,7 +124,7 @@ class ShareSerializer(serializers.Serializer, General):
             array_byte = b'\x02' + array_byte[1:]
             return {'value': self.curve.decode_point(array_byte + decode('01', 'hex')), 'status': 'success'}
         else:
-            logging.error("First bytes of w_bytes is invalid.")
+            logger.error("First bytes of w_bytes is invalid.")
             raise Exception({
                 'status': 'invalid',
                 'message': 'First bytes of w_bytes is invalid.'
@@ -168,8 +169,8 @@ class ShareSerializer(serializers.Serializer, General):
             p1 = decode(pk, "hex")
             p2 = decode(w, "hex")
         except ValueError as e:
-            logging.error(e)
-            logging.error("Type of input is invalid.")
+            logger.error("Share input parameters are not valid.")
+            logger.error(e)
             # Generate uniq id for share
             attrs.update({
                 'share': self.blake(pk + n + w, 'hex'),
@@ -186,7 +187,9 @@ class ShareSerializer(serializers.Serializer, General):
             tx_id = block.tx_id
             # Generate uniq id for share
             share_id = self.blake(message + nonce + p1 + p2, 'hex')
+            logger.info('Block for pk {} is present.'.format(pk))
         except Block.DoesNotExist:
+            logger.error('Block for pk {} does not exist, can not set share!'.format(pk))
             raise ValidationError({
                 'message': 'There isn\'t this public-key',
                 'status': 'failed'
@@ -201,13 +204,16 @@ class ShareSerializer(serializers.Serializer, General):
             'status': '',
             'difficulty': difficulty
         }
-        # Validate solved or valid or invalid(d > pool difficulty)
+        # Validate solved or valid or invalid (d > pool difficulty)
+        logger.info('Validating difficulty for share with pk {}.'.format(pk))
         flag = self.__validate_difficulty__(d, difficulty)
+        logger.info('Difficulty validation result for share with pk {}.'.format(pk))
         # validate_right_left
         validation = self.__validate_right_left__(message, nonce, p1, p2, d)
         # ValidateBlock
         response['status'] = 'solved' if validation == 1 and flag == 1 else (
             'valid' if validation == 1 and flag == 2 else 'invalid')
+        logger.info('Share status with pk {}: {}'.format(pk, response['status']))
         if response['status'] == 'solved':
             response.update({'headers_height': height})
             response.update({'tx_id': tx_id})
@@ -241,8 +247,8 @@ class ProofSerializer(serializers.Serializer):
         try:
             levels = list(map(lambda le: [decode(le, "hex")[1:], decode(le, "hex")[0:1]], levels_encoded))
         except ValueError as e:
-            logging.error(e)
-            logging.error("Type of input is invalid.")
+            logger.error("Levels input parameter in proof is not valid.")
+            logger.error(e)
             raise Exception({
                 'pk': pk,
                 'message': 'Type of input is invalid',
@@ -261,6 +267,7 @@ class ProofSerializer(serializers.Serializer):
             # Get information miner(ex: Transaction Id) from database
             block = Block.objects.get(public_key=pk)
             if not block.tx_id == leaf:
+                logger.error('The provided leaf is not valid with pk {}'.format(pk))
                 raise Exception({
                     'pk': pk,
                     'message': 'The leaf is invalid.',
@@ -298,8 +305,8 @@ class ProofSerializer(serializers.Serializer):
         try:
             msg_pre_image = decode(msg_pre_image_base16, "hex")
         except ValueError as e:
-            logging.error(e)
-            logging.error("Type of input is invalid.")
+            logger.error("Proof input parameters are not valid.")
+            logger.error(e)
             raise ValidationError({
                 'pk': pk,
                 'message': 'Type of input is invalid',
@@ -318,6 +325,7 @@ class ProofSerializer(serializers.Serializer):
             obj, created = Block.objects.get_or_create(public_key=pk)
             obj.msg = msg
             obj.save()
+            logger.info('Proof is valid, updated the block for pk {}'.format(pk))
             attrs.update({
                 'message': 'The proof is valid.',
                 'status': 'success'
@@ -362,16 +370,19 @@ class TransactionSerializer(serializers.Serializer, General):
                                       {'accept': 'application/json', 'content-type': 'application/json'},
                                       data=transaction, request_type="post")
         if data_node['status'] == 'External Error':
+            logger.error('Node failed to validate transaction')
             raise ValidationError({"message": data_node['response']})
         else:
             tx_id = data_node.get('response')
             response['tx_id'] = tx_id
             if tx_id == transaction['id']:
+                logger.info("Getting wallet addresses to validate transaction.")
                 # Send request to node for get list of wallet addresses
                 data_node = self.node_request('wallet/addresses',
                                               {'accept': 'application/json', 'content-type': 'application/json',
                                                'api_key': API_KEY})
                 if data_node['status'] == 'External Error':
+                    logger.error('Error while getting wallet addresses.')
                     raise ValidationError({"message": data_node['response']})
                 else:
                     wallet_address = data_node.get('response')
@@ -387,10 +398,13 @@ class TransactionSerializer(serializers.Serializer, General):
                                 value = value + output['value']
                     # Sum value of output field should be bigger than reward policy pool.
                     if value >= Configuration.objects.REWARD * Configuration.objects.REWARD_FACTOR * pow(10, 9):
+                        logger.info('Transaction is valid.')
                         response['message'] = "Transaction is valid"
                     else:
+                        logger.error('Transaction is invalid, either wallet address is invalid or the value')
                         raise ValidationError({"message": ["Wallet address pool or value of transaction is invalid"]})
             else:
+                logger.error('Transaction id is invalid.')
                 raise ValidationError({'message': 'tx_id is invalid'})
         attrs.update(response)
         return attrs
