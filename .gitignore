@@ -6,3 +6,4 @@ ErgoApi/production.py
 .DS_Store
 .venv/*
 static/*
+.important.log

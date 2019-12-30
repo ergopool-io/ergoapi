@@ -4,9 +4,10 @@ import requests
 import logging
 import json
 
+logger = logging.getLogger(__name__)
+
 
 class General:
-
     @staticmethod
     def blake(data, kind='byte'):
         """
@@ -33,7 +34,6 @@ class General:
                 response = requests.get(NODE_ADDRESS + api, headers=header)
                 json_response = response.json()
                 if not response.status_code == 200:
-                    logging.error(json_response)
                     output = {'response': json_response, 'status': 'External Error'}
                 else:
                     output = {'response': json_response, 'status': 'success'}
@@ -41,14 +41,13 @@ class General:
                 response = requests.post(NODE_ADDRESS + api, json.dumps(data), headers=header)
                 json_response = response.json()
                 if not response.status_code == 200:
-                    logging.error(json_response)
                     output = {'response': json_response, 'status': 'External Error'}
                 else:
                     output = {'response': json_response, 'status': 'success'}
             return output
         except requests.exceptions.RequestException as e:
-            logging.error(e)
-            logging.error("Can not resolve response from node")
+            logger.error("Can not resolve response from node")
+            logger.error(e)
             response = {'status': 'error',
                         'message': 'Can not resolve response from node'}
             raise Exception(response)
