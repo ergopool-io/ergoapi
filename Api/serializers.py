@@ -169,11 +169,11 @@ class ShareSerializer(serializers.Serializer, General):
             p1 = decode(pk, "hex")
             p2 = decode(w, "hex")
         except ValueError as e:
-            logger.error("Share input parameters are not valid.")
+            logger.error("Share input parameters aren't valid.")
             logger.error(e)
             # Generate uniq id for share
             attrs.update({
-                'share': self.blake(pk + n + w, 'hex'),
+                'share': self.blake((pk + n + w).encode('utf-8'), 'hex'),
                 'status': "invalid"
             })
             return attrs
