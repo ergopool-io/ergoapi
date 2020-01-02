@@ -17,6 +17,8 @@ from Api.utils.general import General
 
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL")
 
+logger = logging.getLogger(__name__)
+
 
 class AccountView(View):
     def get(self, request, public_key=""):
@@ -88,11 +90,12 @@ class TransactionView(viewsets.GenericViewSet, mixins.CreateModelMixin):
         share = serializer.validated_data
         headers = self.get_success_headers(serializer.data)
         # Check if block would have existed update tx_id else set public_key of miner then set tx_id.
-        block = Block.objects.filter(public_key=share.get("pk")).first()
+        block = Block.objects.filter(public_key=share.get("pk").lower()).first()
         if not block:
-            block = Block(public_key=share.get("pk"))
+            block = Block(public_key=share.get("pk").lower())
         block.tx_id = share.get("tx_id")
         block.save()
+        logger.info('Saved or updated the block for pk {}'.format(share.get('pk')))
         return Response({'message': share.get("message")}, status=status.HTTP_201_CREATED, headers=headers)
 
 
@@ -184,11 +187,11 @@ class DashboardView(viewsets.GenericViewSet,
         """
         url = os.path.join(ACCOUNTING, "dashboard/")
         try:
-            response = requests.get(url+pk).json() if pk else requests.get(url).json()
+            response = requests.get(url + pk).json() if pk else requests.get(url).json()
             return Response(response, status=status.HTTP_200_OK)
         except requests.exceptions.RequestException as e:
-            logging.error(e)
-            logging.error("Can not resolve response from Accounting")
+            logger.error('Can not resolve response from Accounting for pk {}'.format(pk))
+            logger.error(e)
             response = {'message': "Internal Server Error"}
             return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
