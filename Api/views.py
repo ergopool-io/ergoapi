@@ -90,9 +90,9 @@ class TransactionView(viewsets.GenericViewSet, mixins.CreateModelMixin):
         share = serializer.validated_data
         headers = self.get_success_headers(serializer.data)
         # Check if block would have existed update tx_id else set public_key of miner then set tx_id.
-        block = Block.objects.filter(public_key=share.get("pk")).first()
+        block = Block.objects.filter(public_key=share.get("pk").lower()).first()
         if not block:
-            block = Block(public_key=share.get("pk"))
+            block = Block(public_key=share.get("pk").lower())
         block.tx_id = share.get("tx_id")
         block.save()
         logger.info('Saved or updated the block for pk {}'.format(share.get('pk')))

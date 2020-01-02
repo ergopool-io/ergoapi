@@ -79,6 +79,8 @@ class TransactionValidateApiTest(TransactionTestCase):
         self.assertEqual(response.status_code, 201)
         # check the content of the response
         self.assertEqual(response.json(), result)
+        # a block with lowercase public key must created
+        self.assertTrue(Block.objects.filter(public_key=data_input["pk"].lower()).exists())
 
     @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
     def test_post_invalid_tx_id(self, mock):
@@ -286,13 +288,13 @@ class TestValidateBlock(TransactionTestCase):
                              tx_id="53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5")
 
         share = {
-            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8B178db37ec034328a23fed4855a9",
             "w": "03b783831ab40435c02bf0b3225890540b9689db3c93d4b0bdb32e5a837f281438",
             "nonce": "0000000000400ee0",
             "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406
         }
         result_validate = {
-            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8B178db37ec034328a23fed4855a9",
             "w": "03b783831ab40435c02bf0b3225890540b9689db3c93d4b0bdb32e5a837f281438",
             "nonce": "0000000000400ee0",
             "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406,
@@ -303,6 +305,8 @@ class TestValidateBlock(TransactionTestCase):
 
         block = ShareSerializer()
         response = block.validate(share)
+        # check status for this block is invalid
+        self.assertEqual(response.get("status"), "invalid")
         self.assertEqual(result_validate, response)
 
     def test_status_invalid_wrong_input(self):

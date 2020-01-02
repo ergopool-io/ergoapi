@@ -159,7 +159,7 @@ class ShareSerializer(serializers.Serializer, General):
 
     def validate(self, attrs):
         n = attrs['nonce']
-        pk = attrs['pk']
+        pk = attrs['pk'].lower()
         w = attrs['w']
         d = attrs['d']
 
@@ -299,7 +299,7 @@ class ProofSerializer(serializers.Serializer):
         """
         msg_pre_image_base16 = attrs['msg_pre_image']
         leaf = attrs['leaf']
-        pk = attrs['pk']
+        pk = attrs['pk'].lower()
         levels_encoded = attrs['levels']
         self.__validate_transaction_id__(pk, leaf)
         try:
@@ -432,3 +432,9 @@ class ConfigurationValueSerializer(serializers.Serializer):
 
     class Meta:
         fields = ['reward', 'wallet_address', 'pool_difficulty_factor']
+
+    def update(self, instance, validated_data):
+        pass
+
+    def create(self, validated_data):
+        pass
