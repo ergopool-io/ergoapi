@@ -40,6 +40,10 @@ class ShareSerializer(serializers.Serializer, General):
     # is used for this purpose
     valid_range = int(pow(2, 256) / ec_order) * ec_order
 
+    def __init__(self):
+        self.base_factor = Configuration.objects.POOL_BASE_FACTOR
+        super(ShareSerializer, self).__init__()
+
     # biggest number <= 2^256 that is divisible by q without remainder
 
     def validate_d(self, value):
@@ -141,7 +145,7 @@ class ShareSerializer(serializers.Serializer, General):
         # Convert difficulty to base
         base = self.__get_base__(difficulty)
         # Set POOL_DIFFICULTY
-        pool_difficulty = base * Configuration.objects.POOL_DIFFICULTY_FACTOR
+        pool_difficulty = base * self.base_factor
         # Compare difficulty and base and return
         return 1 if d < base else (2 if base < d < pool_difficulty else 0)
 
@@ -202,7 +206,7 @@ class ShareSerializer(serializers.Serializer, General):
         response = {
             'share': share_id,
             'status': '',
-            'difficulty': difficulty
+            'difficulty': int(difficulty / self.base_factor)
         }
         # Validate solved or valid or invalid (d > pool difficulty)
         logger.info('Validating difficulty for share with pk {}.'.format(pk))
@@ -211,6 +215,12 @@ class ShareSerializer(serializers.Serializer, General):
         # validate_right_left
         validation = self.__validate_right_left__(message, nonce, p1, p2, d)
         # ValidateBlock
+        if validation == 1 and flag == 1:
+            response['status'] = "solved"
+        elif validation == 1 and flag == 2:
+            response['status'] = 'valid'
+        else:
+            response['status'] = 'invalid'
         response['status'] = 'solved' if validation == 1 and flag == 1 else (
             'valid' if validation == 1 and flag == 2 else 'invalid')
         logger.info('Share status with pk {}: {}'.format(pk, response['status']))
