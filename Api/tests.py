@@ -493,7 +493,7 @@ class ConfigurationValueApiTest(TransactionTestCase):
         result = {
             "reward": int(DEFAULT_KEY_VALUES['REWARD'] * DEFAULT_KEY_VALUES['REWARD_FACTOR'] * pow(10, 9)),
             "wallet_address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM",
-            "pool_difficulty_factor": DEFAULT_KEY_VALUES['POOL_DIFFICULTY_FACTOR']
+            "pool_base_factor": DEFAULT_KEY_VALUES['POOL_BASE_FACTOR']
         }
         # send a http 'get' request to the configuration endpoint
         response = self.client.get('/api/config/value/')
@@ -516,12 +516,12 @@ class ConfigurationValueApiTest(TransactionTestCase):
         # Create Objects configuration in database
         Configuration.objects.create(key='REWARD', value='40')
         Configuration.objects.create(key='REWARD_FACTOR', value='1')
-        Configuration.objects.create(key='POOL_DIFFICULTY_FACTOR', value='1')
+        Configuration.objects.create(key='POOL_BASE_FACTOR', value='1')
         # response of API /config/value should be this
         result = {
             "reward": 40 * 1 * pow(10, 9),
             "wallet_address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM",
-            "pool_difficulty_factor": 1
+            "pool_base_factor": 1
         }
 
         # send a http 'get' request to the configuration endpoint

@@ -44,9 +44,6 @@ class ShareView(viewsets.GenericViewSet,
     def get_queryset(self):
         return None
 
-    def perform_create(self, serializer):
-        pass
-
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -159,7 +156,7 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet):
         return Response({
             'reward': reward,
             'wallet_address': wallet_address,
-            'pool_difficulty_factor': result['POOL_DIFFICULTY_FACTOR']
+            'pool_base_factor': result['POOL_BASE_FACTOR']
         })
 
 
