@@ -10,12 +10,17 @@ from rest_framework import filters
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import IsAuthenticated
 import logging
-
+import urllib.parse as urlparse
+from urllib.parse import urljoin, urlencode
+from django.http import HttpResponse
+# import lxml.html as LH
 from Api import serializers
 from Api.models import Block, Configuration, DEFAULT_KEY_VALUES
 from Api.utils.general import General
 
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL")
+ACCOUNTING_HOST = getattr(settings, "ACCOUNTING_HOST")
+PREFIX_ACCOUNTING_API = getattr(settings, "PREFIX_ACCOUNTING_API")
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +196,85 @@ class DashboardView(viewsets.GenericViewSet,
             return Response(response, status=status.HTTP_200_OK)
         except requests.exceptions.RequestException as e:
             logger.error('Can not resolve response from Accounting for pk {}'.format(pk))
+            logger.error(e)
+            response = {'message': "Internal Server Error"}
+            return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ProxyView(viewsets.GenericViewSet, mixins.CreateModelMixin):
+    serializer_class = serializers.ProxySerializer
+
+    def get_queryset(self):
+        """
+        Create url with query_params of request for send to accounting
+        :return: url (str)
+        """
+        query = dict()
+        # Create url for send to explorer and set limit for get blocks.
+        for param in self.request.query_params:
+            value = self.request.query_params.get(param)
+            query[param] = value
+        return query
+
+    def list(self, request, *args, **kwargs):
+        return self.get_response(request)
+
+    def retrieve(self, request, *args, **kwargs):
+        pk = kwargs.get("pk").lower()
+        return self.get_response(request, pk)
+
+    def get_response(self, request, pk=None):
+        """
+        Returns accounting response.
+        :param request:
+        :param pk:
+        :return:
+        """
+        base = urljoin(ACCOUNTING, self.basename + '/')
+        queryset = self.get_queryset()
+        url_parts = list(urlparse.urlparse(base))
+        query = dict(urlparse.parse_qsl(url_parts[4]))
+        query.update(queryset)
+        url_parts[4] = urlencode(query)
+        url = urlparse.urlunparse(url_parts)
+
+        try:
+            header = dict(request._request.headers)
+            header['Host'] = ACCOUNTING_HOST
+            header.pop('Content-Length')
+
+            response = requests.get(urljoin(url, pk), headers=header) if pk else requests.get(url, headers=header)
+            html = response.content
+            # TODO : pars html with package below
+            # root = LH.fromstring(html)
+            # for el in root.iter('a'):
+            #     el.attrib['href'] = el.attrib['href']
+            #     print(el.attrib['href'])
+            cookies = list(response.cookies).pop() if list(response.cookies) else None
+            # Set content and status code from accounting response
+            http_response = HttpResponse(response.content, status=response.status_code)
+            # Set header from response accounting
+            not_allowed = ['Connection', 'Keep-Alive', 'Proxy-Authenticate', 'Proxy-Authorization', 'TE',
+                     'Transfer-Encoding', 'Upgrade']
+            for head in response.headers:
+                if head not in not_allowed:
+                    http_response.__setitem__(str(head), str(response.headers[head]))
+            # Set cookies from response of accounting
+            if cookies:
+                http_response.set_cookie(cookies.name if hasattr(cookies, 'name') else "",
+                                         cookies.value if hasattr(cookies, 'value') else "",
+                                         cookies.max_age if hasattr(cookies, 'max_age') else None,
+                                         cookies.expires if hasattr(cookies, 'expires') else None,
+                                         cookies.path if hasattr(cookies, 'path') else "/",
+                                         cookies.domain if hasattr(cookies, 'domain') else None,
+                                         cookies.secure if hasattr(cookies, 'secure') else False,
+                                         cookies.httponly if hasattr(cookies, 'httponly') else False,
+                                         cookies._rest.get('SameSite') if hasattr(cookies, '_rest') and
+                                                                          cookies._rest.get('SameSite') else None)
+            return http_response
+
+        except requests.exceptions.RequestException as e:
+            logger.error('Can not resolve response from Accounting')
             logger.error(e)
             response = {'message': "Internal Server Error"}
             return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

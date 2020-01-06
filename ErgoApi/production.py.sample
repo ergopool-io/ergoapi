@@ -24,6 +24,11 @@ API_KEY = "Secret Key of Node"
 # Access url for accounting system
 ACCOUNTING_URL = "http://127.0.0.1:8000"
 
+# Prefix accounting service APIs that should be ignored
+ACCOUNTING_API_IGNORE = ['conf']
+
+# Prefix accounting service register APIs
+PREFIX_ACCOUNTING_API = 'accounting'
 
 ALLOWED_HOSTS = ["127.0.0.1"]
 

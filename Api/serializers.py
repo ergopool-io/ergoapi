@@ -438,3 +438,15 @@ class ConfigurationValueSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         pass
+
+
+class ProxySerializer(serializers.Serializer):
+
+    class Meta:
+        fields = ['__all__']
+
+    # def update(self, instance, validated_data):
+    #     pass
+    #
+    # def create(self, validated_data):
+    #     pass
