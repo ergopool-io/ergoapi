@@ -246,6 +246,7 @@ class ProxyView(viewsets.GenericViewSet, mixins.CreateModelMixin):
             response = requests.get(urljoin(url, pk), headers=header) if pk else requests.get(url, headers=header)
             html = response.content
             # TODO : pars html with package below
+            #  https://stackoverflow.com/questions/19357506/python-find-html-tags-and-replace-their-attributes
             # root = LH.fromstring(html)
             # for el in root.iter('a'):
             #     el.attrib['href'] = el.attrib['href']
