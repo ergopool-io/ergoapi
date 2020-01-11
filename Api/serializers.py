@@ -448,3 +448,39 @@ class ConfigurationValueSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         pass
+
+
+def builder_serializer(options):
+    # Define types of field
+    fields_type = {
+        'integer': lambda fields: serializers.IntegerField(**fields),
+        'float': lambda fields: serializers.FloatField(**fields),
+        'string': lambda fields: serializers.CharField(**fields),
+        'choice': lambda fields: serializers.ChoiceField(**fields),
+        'datetime': lambda fields: serializers.DateTimeField(**fields)
+                   }
+
+    class ProxySerializer(serializers.Serializer):
+
+        class Meta:
+            fields = ['__all__']
+
+        def __init__(self, *args, **kwargs):
+            super(ProxySerializer, self).__init__(*args, **kwargs)
+            # Create Fields for content rest framework
+            if options:
+                for action in options:
+                    for filed in options[action]:
+                        param = options[action][filed]
+                        if param['read_only']:
+                            continue
+                        field_type = param.pop('type')
+                        if field_type == 'choice':
+                            choices = tuple()
+                            for choice in param['choices']:
+                                choices = choices + ((choice['value'], choice['display_name']),)
+                            param['choices'] = choices
+                        self.fields.update(
+                            {filed: fields_type[field_type if not field_type == 'field' else 'integer'](param)})
+                        param.update({'type': field_type})
+    return ProxySerializer
