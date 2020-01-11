@@ -140,7 +140,9 @@ class ConfigurationViewSet(viewsets.GenericViewSet,
             configuration.save()
 
 
-class ConfigurationValueViewSet(viewsets.GenericViewSet):
+class ConfigurationValueViewSet(viewsets.GenericViewSet,
+                                mixins.ListModelMixin,
+                                mixins.RetrieveModelMixin):
     """
     View set for api /config/value/
     Handel list and get method
@@ -151,10 +153,18 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet):
         return None
 
     def list(self, request, *args, **kwargs):
-        return self.get_response()
+        return Response(self.get_response())
+
+    def retrieve(self, request, *args, **kwargs):
+        return Response(self.get_response(kwargs.get("pk").lower()))
 
     @staticmethod
-    def get_response():
+    def get_response(pk=None):
+        """
+        get configuration for json.
+        :param pk: if this parameter set return list miner specific configuration otherwise return general configuration
+        :return: a json contain all configuration
+        """
         result = DEFAULT_KEY_VALUES.copy()
         config = Configuration.objects.all()
         for x in config.values_list('key', flat=True):
@@ -165,12 +175,12 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet):
             return data_node
         else:
             wallet_address = data_node.get('response')[0]
-        return Response({
+        return {
             'reward': reward,
             'wallet_address': wallet_address,
             'pool_base_factor': result['POOL_BASE_FACTOR'],
             'max_chunk_size': result['SHARE_CHUNK_SIZE'],
-        })
+        }
 
 
 class DashboardView(viewsets.GenericViewSet,
