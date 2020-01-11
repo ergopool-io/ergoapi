@@ -1,14 +1,17 @@
 from django.db import models
 
 KEY_CHOICES = (
-    ("POOL_BASE_FACTOR", "POOL_BASE_FACTOR"),
-    ("REWARD", "REWARD"),
-    ("REWARD_FACTOR", "REWARD_FACTOR"))
+    ("POOL_BASE_FACTOR", "Pool base factor"),
+    ("REWARD", "Reward"),
+    ("REWARD_FACTOR", "Reward factor"),
+    ("SHARE_CHUNK_SIZE", "Share chunk size")
+)
 
 DEFAULT_KEY_VALUES = {
     'POOL_BASE_FACTOR': 1000,
     'REWARD': 67.5,
-    'REWARD_FACTOR': 1
+    'REWARD_FACTOR': 1,
+    'SHARE_CHUNK_SIZE': 10
 }
 
 

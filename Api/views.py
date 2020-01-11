@@ -47,18 +47,28 @@ class ShareView(viewsets.GenericViewSet,
         return None
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+        data = request.data
+        if not isinstance(data, list):
+            data = [data]
+        if len(data) > Configuration.objects.SHARE_CHUNK_SIZE:
+            return Response({
+                "status": "error",
+                "message": "too big chunk"
+            }, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+        serializer = self.get_serializer(data=data, many=True)
         serializer.is_valid(raise_exception=True)
-        share = serializer.validated_data
-        url = os.path.join(ACCOUNTING, "shares/")
-        response = requests.post(url, json={
-            "miner": share.get("pk"),
-            "share": share.get("share"),
-            "status": share.get("status"),
-            "difficulty": share.get("difficulty"),
-            "transaction_id": share.get("tx_id"),
-            "block_height": share.get("headers_height"),
-        }).json()
+        shares = serializer.validated_data
+        response = []
+        for share in shares:
+            url = os.path.join(ACCOUNTING, "shares/")
+            response.append(requests.post(url, json={
+                "miner": share.get("pk"),
+                "share": share.get("share"),
+                "status": share.get("status"),
+                "difficulty": share.get("difficulty"),
+                "transaction_id": share.get("tx_id"),
+                "block_height": share.get("headers_height"),
+            }).json())
         headers = self.get_success_headers(serializer.data)
         return Response(response, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -145,8 +155,8 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet):
 
     @staticmethod
     def get_response():
+        result = DEFAULT_KEY_VALUES.copy()
         config = Configuration.objects.all()
-        result = DEFAULT_KEY_VALUES
         for x in config.values_list('key', flat=True):
             result[x] = config.get(key=x).value
         reward = int(result['REWARD'] * result['REWARD_FACTOR'] * pow(10, 9))
@@ -158,7 +168,8 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet):
         return Response({
             'reward': reward,
             'wallet_address': wallet_address,
-            'pool_base_factor': result['POOL_BASE_FACTOR']
+            'pool_base_factor': result['POOL_BASE_FACTOR'],
+            'max_chunk_size': result['SHARE_CHUNK_SIZE'],
         })
 
 
