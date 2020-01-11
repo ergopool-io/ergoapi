@@ -1,3 +1,5 @@
+from urllib.parse import urljoin
+
 from ErgoApi.settings import NODE_ADDRESS
 from hashlib import blake2b
 import requests
@@ -29,25 +31,24 @@ class General:
         :return: response of request
         """
         try:
-            output = dict()
-            if request_type == "get":
-                response = requests.get(NODE_ADDRESS + api, headers=header)
-                json_response = response.json()
-                if not response.status_code == 200:
-                    output = {'response': json_response, 'status': 'External Error'}
-                else:
-                    output = {'response': json_response, 'status': 'success'}
-            elif request_type == "post":
-                response = requests.post(NODE_ADDRESS + api, json.dumps(data), headers=header)
-                json_response = response.json()
-                if not response.status_code == 200:
-                    output = {'response': json_response, 'status': 'External Error'}
-                else:
-                    output = {'response': json_response, 'status': 'success'}
-            return output
+            # check allowed methods
+            if request_type not in ['get', 'post', 'put', 'patch', 'option']:
+                return {"status": "error", "response": "invalid request type"}
+            # requests kwargs generated
+            kwargs = {"headers": header}
+            # append data to kwargs if exists
+            if data:
+                kwargs["data"] = json.dumps(data)
+            # call requests method according to request_type
+            response = getattr(requests, request_type)(urljoin(NODE_ADDRESS, api), **kwargs)
+            response_json = response.json()
+            # check status code 2XX range is success
+            return {
+                "response": response_json,
+                "status": "success" if 200 <= response.status_code <= 299 else "External Error"
+            }
         except requests.exceptions.RequestException as e:
             logger.error("Can not resolve response from node")
             logger.error(e)
-            response = {'status': 'error',
-                        'message': 'Can not resolve response from node'}
+            response = {'status': 'error', 'message': 'Can not resolve response from node'}
             raise Exception(response)

@@ -40,9 +40,9 @@ class ShareSerializer(serializers.Serializer, General):
     # is used for this purpose
     valid_range = int(pow(2, 256) / ec_order) * ec_order
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         self.base_factor = Configuration.objects.POOL_BASE_FACTOR
-        super(ShareSerializer, self).__init__()
+        super(ShareSerializer, self).__init__(*args, **kwargs)
 
     # biggest number <= 2^256 that is divisible by q without remainder
 
@@ -58,7 +58,7 @@ class ShareSerializer(serializers.Serializer, General):
         :param difficulty: difficulty of network
         :return: base
         """
-        return self.ec_order / difficulty
+        return int(self.ec_order / difficulty)
 
     def __gen_indexes__(self, seed):
         """
@@ -461,6 +461,12 @@ def builder_serializer(options):
                    }
 
     class ProxySerializer(serializers.Serializer):
+
+        def update(self, instance, validated_data):
+            pass
+
+        def create(self, validated_data):
+            pass
 
         class Meta:
             fields = ['__all__']
