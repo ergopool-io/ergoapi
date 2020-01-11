@@ -76,6 +76,16 @@ try:
 except:
     raise Exception("System configured incorrectly")
 
+# Create Accounting address
+ACCOUNTING_HOST = "%s:%d" % (ACCOUNTING_IP, ACCOUNTING_PORT)
+ACCOUNTING_URL = "%s://%s:%d/" % (ACCOUNTING_PROTOCOL, ACCOUNTING_IP, ACCOUNTING_PORT)
+
+# Prefix accounting service APIs that should be ignored (ex: ['conf'])
+ACCOUNTING_API_IGNORE = ['conf', 'shares']
+
+# Prefix accounting service register APIs
+ACCOUNTING_API_PREFIX = 'accounting'
+
 # Password validation
 # https://docs.djangoproject.com/en/2.2/ref/settings/#auth-password-validators
 

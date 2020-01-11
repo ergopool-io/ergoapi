@@ -15,8 +15,11 @@ DATABASES = {
 # Allowed Hosts
 ALLOWED_HOSTS = [os.environ.get('HOST')]
 
+
 # Access url for accounting system
-ACCOUNTING_URL = "http://" + os.environ.get("ACCOUNTING")
+ACCOUNTING_IP = os.environ.get("ACCOUNTING_IP")
+ACCOUNTING_PORT = os.environ.get("ACCOUNTING_PORT")
+ACCOUNTING_PROTOCOL = os.environ.get("ACCOUNTING_PROTOCOL")
 
 
 # Address Node (ex: "http://127.0.0.1:9053/")
