@@ -40,6 +40,10 @@ class ShareSerializer(serializers.Serializer, General):
     # is used for this purpose
     valid_range = int(pow(2, 256) / ec_order) * ec_order
 
+    def __init__(self, *args, **kwargs):
+        self.base_factor = Configuration.objects.POOL_BASE_FACTOR
+        super(ShareSerializer, self).__init__(*args, **kwargs)
+
     # biggest number <= 2^256 that is divisible by q without remainder
 
     def validate_d(self, value):
@@ -54,7 +58,7 @@ class ShareSerializer(serializers.Serializer, General):
         :param difficulty: difficulty of network
         :return: base
         """
-        return self.ec_order / difficulty
+        return int(self.ec_order / difficulty)
 
     def __gen_indexes__(self, seed):
         """
@@ -141,7 +145,7 @@ class ShareSerializer(serializers.Serializer, General):
         # Convert difficulty to base
         base = self.__get_base__(difficulty)
         # Set POOL_DIFFICULTY
-        pool_difficulty = base * Configuration.objects.POOL_DIFFICULTY_FACTOR
+        pool_difficulty = base * self.base_factor
         # Compare difficulty and base and return
         return 1 if d < base else (2 if base < d < pool_difficulty else 0)
 
@@ -202,7 +206,7 @@ class ShareSerializer(serializers.Serializer, General):
         response = {
             'share': share_id,
             'status': '',
-            'difficulty': difficulty
+            'difficulty': int(difficulty / self.base_factor)
         }
         # Validate solved or valid or invalid (d > pool difficulty)
         logger.info('Validating difficulty for share with pk {}.'.format(pk))
@@ -211,6 +215,12 @@ class ShareSerializer(serializers.Serializer, General):
         # validate_right_left
         validation = self.__validate_right_left__(message, nonce, p1, p2, d)
         # ValidateBlock
+        if validation == 1 and flag == 1:
+            response['status'] = "solved"
+        elif validation == 1 and flag == 2:
+            response['status'] = 'valid'
+        else:
+            response['status'] = 'invalid'
         response['status'] = 'solved' if validation == 1 and flag == 1 else (
             'valid' if validation == 1 and flag == 2 else 'invalid')
         logger.info('Share status with pk {}: {}'.format(pk, response['status']))
@@ -438,3 +448,45 @@ class ConfigurationValueSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         pass
+
+
+def builder_serializer(options):
+    # Define types of field
+    fields_type = {
+        'integer': lambda fields: serializers.IntegerField(**fields),
+        'float': lambda fields: serializers.FloatField(**fields),
+        'string': lambda fields: serializers.CharField(**fields),
+        'choice': lambda fields: serializers.ChoiceField(**fields),
+        'datetime': lambda fields: serializers.DateTimeField(**fields)
+                   }
+
+    class ProxySerializer(serializers.Serializer):
+
+        def update(self, instance, validated_data):
+            pass
+
+        def create(self, validated_data):
+            pass
+
+        class Meta:
+            fields = ['__all__']
+
+        def __init__(self, *args, **kwargs):
+            super(ProxySerializer, self).__init__(*args, **kwargs)
+            # Create Fields for content rest framework
+            if options:
+                for action in options:
+                    for filed in options[action]:
+                        param = options[action][filed]
+                        if param['read_only']:
+                            continue
+                        field_type = param.pop('type')
+                        if field_type == 'choice':
+                            choices = tuple()
+                            for choice in param['choices']:
+                                choices = choices + ((choice['value'], choice['display_name']),)
+                            param['choices'] = choices
+                        self.fields.update(
+                            {filed: fields_type[field_type if not field_type == 'field' else 'integer'](param)})
+                        param.update({'type': field_type})
+    return ProxySerializer

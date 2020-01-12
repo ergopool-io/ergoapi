@@ -10,12 +10,14 @@ from rest_framework import filters
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import IsAuthenticated
 import logging
+from urllib.parse import urljoin, urlencode, urlparse, parse_qsl, urlunparse
 
 from Api import serializers
 from Api.models import Block, Configuration, DEFAULT_KEY_VALUES
 from Api.utils.general import General
 
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL")
+ACCOUNTING_HOST = getattr(settings, "ACCOUNTING_HOST")
 
 logger = logging.getLogger(__name__)
 
@@ -44,22 +46,29 @@ class ShareView(viewsets.GenericViewSet,
     def get_queryset(self):
         return None
 
-    def perform_create(self, serializer):
-        pass
-
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+        data = request.data
+        if not isinstance(data, list):
+            data = [data]
+        if len(data) > Configuration.objects.SHARE_CHUNK_SIZE:
+            return Response({
+                "status": "error",
+                "message": "too big chunk"
+            }, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+        serializer = self.get_serializer(data=data, many=True)
         serializer.is_valid(raise_exception=True)
-        share = serializer.validated_data
-        url = os.path.join(ACCOUNTING, "shares/")
-        response = requests.post(url, json={
-            "miner": share.get("pk"),
-            "share": share.get("share"),
-            "status": share.get("status"),
-            "difficulty": share.get("difficulty"),
-            "transaction_id": share.get("tx_id"),
-            "block_height": share.get("headers_height"),
-        }).json()
+        shares = serializer.validated_data
+        response = []
+        for share in shares:
+            url = os.path.join(ACCOUNTING, "shares/")
+            response.append(requests.post(url, json={
+                "miner": share.get("pk"),
+                "share": share.get("share"),
+                "status": share.get("status"),
+                "difficulty": share.get("difficulty"),
+                "transaction_id": share.get("tx_id"),
+                "block_height": share.get("headers_height"),
+            }).json())
         headers = self.get_success_headers(serializer.data)
         return Response(response, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -131,7 +140,9 @@ class ConfigurationViewSet(viewsets.GenericViewSet,
             configuration.save()
 
 
-class ConfigurationValueViewSet(viewsets.GenericViewSet):
+class ConfigurationValueViewSet(viewsets.GenericViewSet,
+                                mixins.ListModelMixin,
+                                mixins.RetrieveModelMixin):
     """
     View set for api /config/value/
     Handel list and get method
@@ -142,12 +153,20 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet):
         return None
 
     def list(self, request, *args, **kwargs):
-        return self.get_response()
+        return Response(self.get_response())
+
+    def retrieve(self, request, *args, **kwargs):
+        return Response(self.get_response(kwargs.get("pk").lower()))
 
     @staticmethod
-    def get_response():
+    def get_response(pk=None):
+        """
+        get configuration for json.
+        :param pk: if this parameter set return list miner specific configuration otherwise return general configuration
+        :return: a json contain all configuration
+        """
+        result = DEFAULT_KEY_VALUES.copy()
         config = Configuration.objects.all()
-        result = DEFAULT_KEY_VALUES
         for x in config.values_list('key', flat=True):
             result[x] = config.get(key=x).value
         reward = int(result['REWARD'] * result['REWARD_FACTOR'] * pow(10, 9))
@@ -156,11 +175,12 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet):
             return data_node
         else:
             wallet_address = data_node.get('response')[0]
-        return Response({
+        return {
             'reward': reward,
             'wallet_address': wallet_address,
-            'pool_difficulty_factor': result['POOL_DIFFICULTY_FACTOR']
-        })
+            'pool_base_factor': result['POOL_BASE_FACTOR'],
+            'max_chunk_size': result['SHARE_CHUNK_SIZE'],
+        }
 
 
 class DashboardView(viewsets.GenericViewSet,
@@ -195,3 +215,156 @@ class DashboardView(viewsets.GenericViewSet,
             response = {'message': "Internal Server Error"}
             return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+def builder_viewset(method, options):
+    """
+    A function for build a class viewset and add functions for method according to allowed method
+    :param method: methods that allowed this api ex:(GET, POST, PUT, OPTIONS, DELETE)
+    :param options: options of api accounting
+    :return: a class viewset that inheritance viewsets.GenericViewSet
+    """
+    def list_method(self, request, *args, **kwargs):
+        accounting_api = self.get_uri()
+        try:
+            response = requests.get(accounting_api)
+        except requests.exceptions.RequestException as e:
+            logger.error('Can not resolve response from Accounting')
+            logger.error(e)
+            response = {'message': "Internal Server Error"}
+            return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        result = modify_pagination(request, response.json())
+        return Response(result, status=response.status_code)
+
+    def retrieve(self, request, *args, **kwargs):
+        pk = None
+        if 'pk' in kwargs:
+            pk = kwargs.get("pk").lower()
+        accounting_api = self.get_uri()
+        try:
+            response = requests.get(urljoin(accounting_api, pk))
+        except requests.exceptions.RequestException as e:
+            logger.error('Can not resolve response from Accounting')
+            logger.error(e)
+            response = {'message': "Internal Server Error"}
+            return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        result = modify_pagination(request, response.json())
+        return Response(result, status=response.status_code)
+
+    def update(self, request, *args, **kwargs):
+        pk = None
+        if 'pk' in kwargs:
+            pk = kwargs.get("pk").lower()
+        accounting_api = self.get_uri()
+        try:
+            response = requests.put(urljoin(accounting_api, pk), request.data) if pk else requests.put(accounting_api,
+                                                                                                         request.data)
+        except requests.exceptions.RequestException as e:
+            logger.error('Can not resolve response from Accounting')
+            logger.error(e)
+            response = {'message': "Internal Server Error"}
+            return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        result = modify_pagination(request, response.json())
+        return Response(result, status=response.status_code)
+
+    def create(self, request, *args, **kwargs):
+        pk = None
+        if 'pk' in kwargs:
+            pk = kwargs.get("pk").lower()
+        accounting_api = self.get_uri()
+        try:
+            response = requests.post(urljoin(accounting_api, pk), request.data) if pk else requests.post(accounting_api,
+                                                                                                         request.data)
+        except requests.exceptions.RequestException as e:
+            logger.error('Can not resolve response from Accounting')
+            logger.error(e)
+            response = {'message': "Internal Server Error"}
+            return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        result = modify_pagination(request, response.json())
+        return Response(result, status=response.status_code)
+
+    def delete(self, request, *args, **kwargs):
+        pk = None
+        if 'pk' in kwargs:
+            pk = kwargs.get("pk").lower()
+        accounting_api = self.get_uri()
+        try:
+            response = requests.delete(urljoin(accounting_api, pk)) if pk else requests.delete(accounting_api)
+        except requests.exceptions.RequestException as e:
+            logger.error('Can not resolve response from Accounting')
+            logger.error(e)
+            response = {'message': "Internal Server Error"}
+            return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        result = modify_pagination(request, response.json())
+        return Response(result, status=response.status_code)
+
+    def modify_pagination(request, result):
+        if 'next' in result:
+            if result['next']:
+                pagination = list(urlparse(result['next']))
+                url_parts = list(urlparse(request.build_absolute_uri()))
+                pagination[1] = url_parts[1]
+                pagination[2] = url_parts[2]
+                result['next'] = urlunparse(pagination)
+        if 'previous' in result:
+            if result['previous']:
+                pagination = list(urlparse(result['previous']))
+                url_parts = list(urlparse(request.build_absolute_uri()))
+                pagination[1] = url_parts[1]
+                pagination[2] = url_parts[2]
+                result['previous'] = urlunparse(pagination)
+        return result
+
+    class ProxyView(viewsets.GenericViewSet):
+        """
+        A Simple View set class for apis of accounting service
+        """
+        serializer_class = serializers.builder_serializer(options)
+
+        def get_queryset(self):
+            """
+            Create url with query_params of request for send to accounting
+            :return: url (str)
+            """
+            query = dict()
+            # Create url for send to explorer and set limit for get blocks.
+            for param in self.request.query_params:
+                value = self.request.query_params.get(param)
+                query[param] = value
+            return query
+
+        def get_uri(self):
+            """
+            Create uri for request to accounting service
+            :return:
+            """
+            # Get Query_param url
+            queryset = dict(self.get_queryset())
+            # Create url for request to accounting service
+            base = urljoin(ACCOUNTING, self.basename + '/')
+            # if Query_param have format remove that because don't have send this param to accounting
+            if 'format' in queryset:
+                queryset.pop('format')
+            # Append query_param end of url for call accounting service
+            url_parts = list(urlparse(base))
+            query = dict(parse_qsl(url_parts[4]))
+            query.update(queryset)
+            url_parts[4] = urlencode(query)
+            accounting_api = urlunparse(url_parts)
+
+            return accounting_api
+
+    # Set functions to class ProxyView according to Allow method in api accounting headers
+    if 'GET' in method:
+        setattr(ProxyView, 'list', list_method)
+        setattr(ProxyView, 'retrieve', retrieve)
+
+    if 'POST' in method:
+        setattr(ProxyView, 'create', create)
+
+    if 'PUT' in method:
+        setattr(ProxyView, 'update', update)
+
+    if 'DELETE' in method:
+        setattr(ProxyView, 'delete', delete)
+
+    return ProxyView

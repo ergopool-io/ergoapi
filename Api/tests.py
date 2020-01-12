@@ -203,7 +203,7 @@ class TestValidateProof(TransactionTestCase):
 
 class TestValidateBlock(TransactionTestCase):
     reset_sequences = True
-    
+
     def mocked_node_request(*args, **kwargs):
         """
         mock function node_request for urls 'mining/candidate and 'info'
@@ -213,7 +213,7 @@ class TestValidateBlock(TransactionTestCase):
                 "status": "success",
                 "response": {
                     "headersHeight": 41496,
-                    "difficulty": 1
+                    "difficulty": Configuration.objects.POOL_BASE_FACTOR
                 }
             }
         return None
@@ -249,31 +249,23 @@ class TestValidateBlock(TransactionTestCase):
         Solution
         Check that d < b and left == right for a share solved.
         """
-
-        Block.objects.create(public_key="0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
-                             msg="f548e38f716e90f52078880c7cdc5a81e27676b26b9b9251b5539e6b1df2ffb5",
+        Block.objects.create(public_key="03cd07843e1f7e25407eda2369ad644854e532e381ab30d6488970e0b87d060d16",
+                             msg="fc0ecfe7a0559c556cb5fe25dd9259e5b548a33502be0c474cd581f77f0acb89",
                              tx_id="53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5")
         share = {
-            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
-            "w": "03b783831ab40435c02bf0b3225890540b9689db3c93d4b0bdb32e5a837f281438",
-            "nonce": "0000000000400ae0",
-            "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406
-        }
-
-        result_validate = {
-            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
-            "w": "03b783831ab40435c02bf0b3225890540b9689db3c93d4b0bdb32e5a837f281438",
-            "nonce": "0000000000400ae0",
-            "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406,
-            "share": "a1ae8ae3f9f9568fd90ac29009c18997d50829d1f7c0cd0bb500d930631f2065",
-            "status": "solved",
-            "difficulty": 1,
-            "headers_height": 41496,
-            "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"
+            "pk": "03cd07843e1f7e25407eda2369ad644854e532e381ab30d6488970e0b87d060d16",
+            "w": "0370b32976a9bc37654e6b34390c8dd30d3dc44c3f52e9421cc4ec31ef6a1bca4c",
+            "nonce": "00000237d4e1e20c",
+            "d": 46242367293113109317096091884217605312791141894953570819396709798327
         }
         block = ShareSerializer()
         response = block.validate(share)
-        self.assertEqual(response, result_validate)
+        self.assertEqual(response.get("pk"), "03cd07843e1f7e25407eda2369ad644854e532e381ab30d6488970e0b87d060d16")
+        self.assertEqual(response.get("status"), "solved")
+        self.assertEqual(response.get("share"), "09c7257058d70ec1e4a2d1248cf42aafc01fe6f773f5d991d295029b7059ca4a")
+        self.assertEqual(response.get("difficulty"), 1)
+        self.assertEqual(response.get("headers_height"), 41496)
+        self.assertEqual(response.get("tx_id"), "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5")
 
     @patch("ErgoApi.settings")
     @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
@@ -493,7 +485,8 @@ class ConfigurationValueApiTest(TransactionTestCase):
         result = {
             "reward": int(DEFAULT_KEY_VALUES['REWARD'] * DEFAULT_KEY_VALUES['REWARD_FACTOR'] * pow(10, 9)),
             "wallet_address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM",
-            "pool_difficulty_factor": DEFAULT_KEY_VALUES['POOL_DIFFICULTY_FACTOR']
+            "pool_base_factor": DEFAULT_KEY_VALUES['POOL_BASE_FACTOR'],
+            "max_chunk_size": 10,
         }
         # send a http 'get' request to the configuration endpoint
         response = self.client.get('/api/config/value/')
@@ -516,12 +509,14 @@ class ConfigurationValueApiTest(TransactionTestCase):
         # Create Objects configuration in database
         Configuration.objects.create(key='REWARD', value='40')
         Configuration.objects.create(key='REWARD_FACTOR', value='1')
-        Configuration.objects.create(key='POOL_DIFFICULTY_FACTOR', value='1')
+        Configuration.objects.create(key='POOL_BASE_FACTOR', value='1')
+        Configuration.objects.create(key='SHARE_CHUNK_SIZE', value='20')
         # response of API /config/value should be this
         result = {
             "reward": 40 * 1 * pow(10, 9),
             "wallet_address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM",
-            "pool_difficulty_factor": 1
+            "pool_base_factor": 1,
+            "max_chunk_size": 20,
         }
 
         # send a http 'get' request to the configuration endpoint
