@@ -3,6 +3,7 @@ from django.test.client import RequestFactory
 from rest_framework.test import APIClient
 from unittest.mock import patch
 from Api.models import Block, KEY_CHOICES, Configuration, DEFAULT_KEY_VALUES
+from codecs import decode
 from django.contrib.auth.models import User
 from Api.serializers import ShareSerializer
 from rest_framework.exceptions import ValidationError
@@ -39,7 +40,51 @@ class TransactionValidateApiTest(TransactionTestCase):
                     "address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"
                 }
             }
-        return None
+
+    def mocked_node_request_external_error_transactions_check(*args, **kwargs):
+        """
+        mock function node_request for urls 'transactions/check', 'wallet/addresses' and 'utils/ergoTreeToAddress/'
+        """
+        if args[0] == "transactions/check":
+            return {
+                "status": "External Error",
+                "response": "External Error"
+            }
+
+    def mocked_node_request_external_error_wallet_addresses(*args, **kwargs):
+        """
+        mock function node_request for urls 'transactions/check', 'wallet/addresses' and 'utils/ergoTreeToAddress/'
+        """
+        if args[0] == "transactions/check":
+            return {
+                "status": "success",
+                "response": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7"
+            }
+        elif args[0] == "wallet/addresses":
+            return {
+                "status": "External Error",
+                "response": "External Error"
+            }
+    
+    def mocked_node_request_external_error_utils_ergo_tree_to_address(*args, **kwargs):
+        """
+        mock function node_request for urls 'transactions/check', 'wallet/addresses' and 'utils/ergoTreeToAddress/'
+        """
+        if args[0] == "transactions/check":
+            return {
+                "status": "success",
+                "response": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7"
+            }
+        elif args[0] == "wallet/addresses":
+            return {
+                "status": "success",
+                "response": ["3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"]
+            }
+        elif "utils/ergoTreeToAddress/" in args[0]:
+            return {
+                "status": "External Error",
+                "response": {"External Error"}
+            }
 
     @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
     def test_post_valid(self, mock):
@@ -162,19 +207,97 @@ class TransactionValidateApiTest(TransactionTestCase):
         # check the content of the response
         self.assertEqual(response.json(), result)
 
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request_external_error_transactions_check)
+    def test_post_node_response_error_transactions_check(self, mock):
+        """
+        In this scenario we want to test the functionality of Validate Transaction API when
+        it is called by a http "post" method.
+        we send a http "post" method for check transaction,
+        We expect that the status code of response be "400" because node send a response with status code except 200
+         after call API transactions/check
+        :return:
+        """
+        data_input = {
+            "pk": "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C",
+            "transaction": {}
+        }
+        # send a http "post" request to the configuration endpoint
+        response = self.client.post("/api/transaction/", data=data_input, content_type="application/json")
+        # check the status of the response
+        self.assertEqual(response.status_code, 400)
+        # check the content of the response
+        self.assertEqual(response.json()['message'], ['External Error'])
+
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request_external_error_wallet_addresses)
+    def test_post_node_response_error_wallet_addresses(self, mock):
+        """
+        In this scenario we want to test the functionality of Validate Transaction API when
+        it is called by a http "post" method.
+        we send a http "post" method for check transaction,
+        We expect that the status code of response be "400" because node send a response with status code except 200
+         after call API wallet/addresses
+        :return:
+        """
+        data_input = {
+            "pk": "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C",
+            "transaction": {
+                "id": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7",
+            }
+        }
+        # send a http "post" request to the configuration endpoint
+        response = self.client.post("/api/transaction/", data=data_input, content_type="application/json")
+        # check the status of the response
+        self.assertEqual(response.status_code, 400)
+        # check the content of the response
+        self.assertEqual(response.json()['message'], ['External Error'])
+
+    @patch("Api.utils.general.General.node_request",
+           side_effect=mocked_node_request_external_error_utils_ergo_tree_to_address)
+    def test_post_node_response_error_utils_ergo_tree_to_address(self, mock):
+        """
+        In this scenario we want to test the functionality of Validate Transaction API when
+        it is called by a http "post" method.
+        we send a http "post" method for check transaction,
+        We expect that the status code of response be "400" because node send a response with status code except 200
+         after call API utils/ergoTreeToAddress
+        :return:
+        """
+        data_input = {
+            "pk": "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C",
+            "transaction": {
+                "id": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7",
+                "outputs": [
+                    {
+                        "value": 1000000000,
+                        "ergoTree": "0008cd027ae614dd724777fe9ead18d82f3c53f04de0525b46d235a74b04af694694485e"
+                    },
+                    {
+                        "value": 1000000,
+                        "ergoTree": "1005040004000e36100204a00b08cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ea02d192a39a8cc7a701730073011001020402d19683030193a38cc7b2a57300000193c2b2a57301007473027303830108cdeeac93b1a57304"
+                    },
+                    {
+                        "value": 216177000000,
+                        "ergoTree": "0008cd027ae614dd724777fe9ead18d82f3c53f04de0525b46d235a74b04af694694485e"
+                    }]
+            }
+        }
+        # send a http "post" request to the configuration endpoint
+        response = self.client.post("/api/transaction/", data=data_input, content_type="application/json")
+        # check the status of the response
+        self.assertEqual(response.status_code, 400)
+        # check the content of the response
+        self.assertEqual(response.json()['message'], ["{'External Error'}"])
+
 
 class TestValidateProof(TransactionTestCase):
     reset_sequences = True
 
-    def test_validate_proof(self):
+    def test_valid(self):
         """
-        In this scenario we want to test the functionality of Configuration value API when
-        it is called by a http 'get' or 'list' method.
-        For the above purpose first we delete all object in database for that check if an object there isn't in the
-         database set default value
-        we send a http 'get' method to retrieve a list of them.
-        We expect that the status code of response be '200 ok' and
-        the json format of response be as below .
+        In this scenario we want to test a valid proof.
+        send a valid data and want to get status valid.
+        we send a http 'post' method to validate a proof.
+        We expect that the status code of response be '200 ok'.
         :return:
         """
         Block.objects.create(public_key="0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
@@ -185,20 +308,128 @@ class TestValidateProof(TransactionTestCase):
             "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
             "levels": ["01c9a7e42a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"]
         }
-        result = {
-            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
-            "msg_pre_image": "0146062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a4872011e52944ffdcd5e7f745ba14df4487ce8cf30f9b02a2be0c5a1096f8b612c190194448af0d8c9ae2170a7d970f621d18707dc4c2d5e9ec168adb1895e5cbbc555853afe04d0a87819523798e4db5f1b75fd43512cf76c5a3ce5eb8527725e12d1c3f9e0eb2db112e2d742dc71c6aa2df4b35fec85d8c28f6dc954796f3f95c308721e60cc9505016238dfbd02000000",
-            "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
-            "levels": ["01c9a7e42a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"],
-            "message": "The proof is valid.",
-            "status": "success"
-        }
-        # send a http "post" request to the configuration endpoint
+        # send a http "post" request to the validation proof
         response = self.client.post("/api/header/", data=proof_data, content_type="application/json")
         # check the status of the response
         self.assertEqual(response.status_code, 201)
         # check the content of the response
-        self.assertEqual(response.json(), result)
+        self.assertEqual(response.json()['message'], 'The proof is valid.')
+        self.assertEqual(response.json()['status'], 'success')
+
+    def test_invalid(self):
+        """
+        In this scenario we want to test a invalid proof leaf_hash != txs_root.
+        send a invalid data and want to get status invalid.
+        we send a http 'post' method to validate a proof.
+        We expect that the status code of response be '200 ok'.
+        :return:
+        """
+        Block.objects.create(public_key="0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+                             tx_id="53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5")
+        proof_data = {
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "msg_pre_image": "0146062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a4872011e52944ffdcd5e7f745ba14df4487ce8cf30f9b02a2be0c5a1096f8b612c190194448af0d8c9ae2170a7d970f621d18707dc4c2d5e9ec168adb1895e5cbbc555853afe04d0a87819523798e4db5f1b75fd43512cf76c5a3ce5eb8527725e12d1c3f9e0eb2db112e2d742dc71c6aa2df4b35fec85d8c28f6dc954796f3f95c308721e60cc9505016238dfbd02000000",
+            "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
+            "levels": ["00c9a7e42a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"]
+        }
+        # send a http "post" request to the validation proof
+        response = self.client.post("/api/header/", data=proof_data, content_type="application/json")
+        # check the status of the response
+        self.assertEqual(response.status_code, 201)
+        # check the content of the response
+        self.assertEqual(response.json()['message'], 'The proof is invalid.')
+        self.assertEqual(response.json()['status'], 'invalid')
+
+    def test_input_invalid_levels(self):
+        """
+        In this scenario we want to test a invalid type input for proof.
+        send a invalid data and want to get status failed because data input have wrong type input (levels).
+        we send a http 'post' method to validate a proof.
+        We expect that the status code of response be '400 ok'.
+        :return:
+        """
+        Block.objects.create(public_key="0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+                             tx_id="53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5")
+        proof_data = {
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "msg_pre_image": "0146062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a4872011e52944ffdcd5e7f745ba14df4487ce8cf30f9b02a2be0c5a1096f8b612c190194448af0d8c9ae2170a7d970f621d18707dc4c2d5e9ec168adb1895e5cbbc555853afe04d0a87819523798e4db5f1b75fd43512cf76c5a3ce5eb8527725e12d1c3f9e0eb2db112e2d742dc71c6aa2df4b35fec85d8c28f6dc954796f3f95c308721e60cc9505016238dfbd02000000",
+            "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
+            "levels": ["01c9a7e?2a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"]
+        }
+        # send a http "post" request to the validation proof
+        response = self.client.post("/api/header/", data=proof_data, content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        response = response.json()
+        self.assertEqual(response['message'], ['Type of input is invalid'])
+        self.assertEqual(response['status'], ['failed'])
+
+    def test_input_invalid_msg_pre_image(self):
+        """
+        In this scenario we want to test a invalid type input for proof.
+        send a invalid data and want to get status failed because data input have wrong type input (msg_pre_image).
+        we send a http 'post' method to validate a proof.
+        We expect that the status code of response be '400 ok'.
+        :return:
+        """
+        Block.objects.create(public_key="0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+                             tx_id="53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5")
+        proof_data = {
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "msg_pre_image": "01?6062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a4872011e52944ffdcd5e7f745ba14df4487ce8cf30f9b02a2be0c5a1096f8b612c190194448af0d8c9ae2170a7d970f621d18707dc4c2d5e9ec168adb1895e5cbbc555853afe04d0a87819523798e4db5f1b75fd43512cf76c5a3ce5eb8527725e12d1c3f9e0eb2db112e2d742dc71c6aa2df4b35fec85d8c28f6dc954796f3f95c308721e60cc9505016238dfbd02000000",
+            "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
+            "levels": ["01c9a7e42a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"]
+        }
+        # send a http "post" request to the validation proof
+        response = self.client.post("/api/header/", data=proof_data, content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        response = response.json()
+        self.assertEqual(response['message'], ['Type of input is invalid'])
+        self.assertEqual(response['status'], ['failed'])
+
+    def test_input_invalid_leaf(self):
+        """
+        In this scenario we want to test a invalid leaf input for proof.
+        send a leaf data and not equal with tx_id in the database for public_key of that.
+        we send a http 'post' method to validate a proof.
+        We expect that the status code of response be '400 ok'.
+        :return:
+        """
+        Block.objects.create(public_key="0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+                             tx_id="63c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5")
+        proof_data = {
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "msg_pre_image": "0146062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a4872011e52944ffdcd5e7f745ba14df4487ce8cf30f9b02a2be0c5a1096f8b612c190194448af0d8c9ae2170a7d970f621d18707dc4c2d5e9ec168adb1895e5cbbc555853afe04d0a87819523798e4db5f1b75fd43512cf76c5a3ce5eb8527725e12d1c3f9e0eb2db112e2d742dc71c6aa2df4b35fec85d8c28f6dc954796f3f95c308721e60cc9505016238dfbd02000000",
+            "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
+            "levels": ["01c9a7e42a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"]
+        }
+        # send a http "post" request to the validation proof
+        response = self.client.post("/api/header/", data=proof_data, content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        response = response.json()
+        self.assertEqual(response['message'], ['The leaf is invalid.'])
+        self.assertEqual(response['status'], ['failed'])
+
+    def test_does_not_exist_block(self):
+        """
+        In this scenario we want to test exist or don't exist block in data base.
+        we send a http 'post' method to validate a proof.
+        We expect that the status code of response be '400 ok'.
+        :return:
+        """
+        Block.objects.create(public_key="123043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+                             tx_id="63c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5")
+        proof_data = {
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "msg_pre_image": "0146062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a4872011e52944ffdcd5e7f745ba14df4487ce8cf30f9b02a2be0c5a1096f8b612c190194448af0d8c9ae2170a7d970f621d18707dc4c2d5e9ec168adb1895e5cbbc555853afe04d0a87819523798e4db5f1b75fd43512cf76c5a3ce5eb8527725e12d1c3f9e0eb2db112e2d742dc71c6aa2df4b35fec85d8c28f6dc954796f3f95c308721e60cc9505016238dfbd02000000",
+            "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
+            "levels": ["01c9a7e42a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"]
+        }
+        # send a http "post" request to the validation proof
+        response = self.client.post("/api/header/", data=proof_data, content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        response = response.json()
+        self.assertEqual(response['message'], ['Transaction not generated.'])
+        self.assertEqual(response['status'], ['failed'])
 
 
 class TestValidateBlock(TransactionTestCase):
@@ -216,7 +447,46 @@ class TestValidateBlock(TransactionTestCase):
                     "difficulty": Configuration.objects.POOL_BASE_FACTOR
                 }
             }
-        return None
+
+    def mocked_node_request_status_valid(*args, **kwargs):
+        """
+        mock function node_request for urls 'mining/candidate and 'info'
+        """
+        if args[0] == "info":
+            return {
+                "status": "success",
+                "response": {
+                    "headersHeight": 41496,
+                    "difficulty": Configuration.objects.POOL_BASE_FACTOR * pow(10, 8)
+                }
+            }
+
+    def test_type_input_d_str(self):
+        block = ShareSerializer()
+        output = block.validate_d("46242367293113109317096091884217605312791141894953570819396709798327")
+        self.assertEqual(output, 46242367293113109317096091884217605312791141894953570819396709798327)
+
+    def test_type_input_d_invalid(self):
+        block = ShareSerializer()
+        try:
+            block.validate_d("462?2367293113109317096091884217605312791141894953570819396709798327")
+        except ValidationError as e:
+            self.assertEquals('invalid number entered', e.args[0])
+
+    def test_ec_point_start_byte_2(self):
+        block = ShareSerializer()
+        output = block.__ec_point__(decode("0254043bd5f16526b0184e6521a0bd462783f8B178db37ec034328a23fed4855a9", "hex"))
+        self.assertEqual(output['value'].x,
+                         38001759640178464358233514318285492856403682368769743827942002958530733692329)
+        self.assertEqual(output['value'].y,
+                         47862723537995571517279590967139629780302343405661481110647004256081707204458)
+
+    def test_ec_point_start_byte_except_2_3(self):
+        block = ShareSerializer()
+        try:
+            block.__ec_point__(decode("0454043bd5f16526b0184e6521a0bd462783f8B178db37ec034328a23fed4855a9", "hex"))
+        except ValidationError as e:
+            self.assertEquals('First bytes of w_bytes is invalid.', e.args[0]['message'])
 
     def test_gen_indexes(self):
         """
@@ -266,6 +536,28 @@ class TestValidateBlock(TransactionTestCase):
         self.assertEqual(response.get("difficulty"), 1)
         self.assertEqual(response.get("headers_height"), 41496)
         self.assertEqual(response.get("tx_id"), "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5")
+
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request_status_valid)
+    def test_status_valid(self, mock):
+        """
+        Solution
+        Check that d < b and left == right for a share solved.
+        """
+        Block.objects.create(public_key="03cd07843e1f7e25407eda2369ad644854e532e381ab30d6488970e0b87d060d16",
+                             msg="fc0ecfe7a0559c556cb5fe25dd9259e5b548a33502be0c474cd581f77f0acb89",
+                             tx_id="53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5")
+        share = {
+            "pk": "03cd07843e1f7e25407eda2369ad644854e532e381ab30d6488970e0b87d060d16",
+            "w": "0370b32976a9bc37654e6b34390c8dd30d3dc44c3f52e9421cc4ec31ef6a1bca4c",
+            "nonce": "00000237d4e1e20c",
+            "d": 46242367293113109317096091884217605312791141894953570819396709798327
+        }
+        block = ShareSerializer()
+        response = block.validate(share)
+        self.assertEqual(response.get("pk"), "03cd07843e1f7e25407eda2369ad644854e532e381ab30d6488970e0b87d060d16")
+        self.assertEqual(response.get("status"), "valid")
+        self.assertEqual(response.get("share"), "09c7257058d70ec1e4a2d1248cf42aafc01fe6f773f5d991d295029b7059ca4a")
+        self.assertEqual(response.get("difficulty"), pow(10, 8))
 
     @patch("ErgoApi.settings")
     @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
@@ -337,7 +629,6 @@ class TestValidateBlock(TransactionTestCase):
         block = ShareSerializer()
         try:
             block.validate(share)
-            self.fail('Validation Error should be raised')
         except ValidationError as e:
             self.assertEquals('failed', e.args[0]['status'])
 
@@ -465,7 +756,6 @@ class ConfigurationValueApiTest(TransactionTestCase):
                 "status": "success",
                 "response": ["3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"]
             }
-        return None
 
     @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
     def test_configuration_api_get_method_list_with_default(self, mock):
@@ -525,3 +815,13 @@ class ConfigurationValueApiTest(TransactionTestCase):
         self.assertEqual(response.status_code, 200)
         # check the content of the response
         self.assertEqual(response.json(), result)
+
+    def test_configuration_manager(self):
+        """
+        this test set all config in database and want get values that set in database for config
+        :return:
+        """
+        for key in KEY_CHOICES:
+            Configuration.objects.create(key=key[0], value=2000)
+        for key in KEY_CHOICES:
+            self.assertEqual(getattr(Configuration.objects, key[0]), 2000)

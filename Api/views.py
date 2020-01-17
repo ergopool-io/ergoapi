@@ -90,9 +90,6 @@ class TransactionView(viewsets.GenericViewSet, mixins.CreateModelMixin):
     def get_queryset(self):
         return None
 
-    def perform_create(self, serializer):
-        pass
-
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -181,39 +178,6 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet,
             'pool_base_factor': result['POOL_BASE_FACTOR'],
             'max_chunk_size': result['SHARE_CHUNK_SIZE'],
         }
-
-
-class DashboardView(viewsets.GenericViewSet,
-                    mixins.ListModelMixin,
-                    mixins.RetrieveModelMixin):
-
-    def get_queryset(self):
-        return None
-
-    def list(self, request, *args, **kwargs):
-        return self.get_response(request)
-
-    def retrieve(self, request, *args, **kwargs):
-        return self.get_response(request, kwargs.get("pk").lower())
-
-    def get_response(self, request, pk=None):
-        """
-        Returns information for this round of shares.
-        In the response, there is total shares count of this round and information about each miner balances.
-        If the pk is set in url parameters, then information is just about that miner.
-        :param request:
-        :param pk:
-        :return:
-        """
-        url = os.path.join(ACCOUNTING, "dashboard/")
-        try:
-            response = requests.get(url + pk).json() if pk else requests.get(url).json()
-            return Response(response, status=status.HTTP_200_OK)
-        except requests.exceptions.RequestException as e:
-            logger.error('Can not resolve response from Accounting for pk {}'.format(pk))
-            logger.error(e)
-            response = {'message': "Internal Server Error"}
-            return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 def builder_viewset(method, options):
