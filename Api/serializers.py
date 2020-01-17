@@ -73,7 +73,7 @@ class ShareSerializer(serializers.Serializer, General):
         if len(result) == self.K:
             return list(result)
         logger.error('Length of map does not equal K.')
-        raise Exception({
+        raise ValidationError({
             'status': 'failed',
             'message': 'gen_indexes : The length of map not equal K'
         })
@@ -129,7 +129,7 @@ class ShareSerializer(serializers.Serializer, General):
             return {'value': self.curve.decode_point(array_byte + decode('01', 'hex')), 'status': 'success'}
         else:
             logger.error("First bytes of w_bytes is invalid.")
-            raise Exception({
+            raise ValidationError({
                 'status': 'invalid',
                 'message': 'First bytes of w_bytes is invalid.'
             })
@@ -259,7 +259,7 @@ class ProofSerializer(serializers.Serializer):
         except ValueError as e:
             logger.error("Levels input parameter in proof is not valid.")
             logger.error(e)
-            raise Exception({
+            raise ValidationError({
                 'pk': pk,
                 'message': 'Type of input is invalid',
                 'status': 'failed'
@@ -278,13 +278,14 @@ class ProofSerializer(serializers.Serializer):
             block = Block.objects.get(public_key=pk)
             if not block.tx_id == leaf:
                 logger.error('The provided leaf is not valid with pk {}'.format(pk))
-                raise Exception({
+                raise ValidationError({
                     'pk': pk,
                     'message': 'The leaf is invalid.',
                     'status': 'failed'
                 })
         except Block.DoesNotExist:
-            raise Exception({
+            logger.error('Block does not exist for public-key {}'.format(pk))
+            raise ValidationError({
                 'pk': pk,
                 'message': 'Transaction not generated.',
                 'status': 'failed'
@@ -397,15 +398,16 @@ class TransactionSerializer(serializers.Serializer, General):
                 else:
                     wallet_address = data_node.get('response')
                     value = 0
-                    for output in transaction['outputs']:
-                        # Send request to node for Generate Ergo address from hex-encoded ErgoTree
-                        data_node = self.node_request('utils/ergoTreeToAddress/' + output['ergoTree'],
-                                                      {'accept': 'application/json'})
-                        if data_node['status'] == 'External Error':
-                            raise ValidationError({"message": data_node['response']})
-                        # Check address after convert ergo tree that would have existed in the wallet_address
-                        elif data_node.get('response')['address'] in wallet_address:
-                                value = value + output['value']
+                    if 'outputs' in transaction:
+                        for output in transaction['outputs']:
+                            # Send request to node for Generate Ergo address from hex-encoded ErgoTree
+                            data_node = self.node_request('utils/ergoTreeToAddress/' + output['ergoTree'],
+                                                          {'accept': 'application/json'})
+                            if data_node['status'] == 'External Error':
+                                raise ValidationError({"message": data_node['response']})
+                            # Check address after convert ergo tree that would have existed in the wallet_address
+                            elif data_node.get('response')['address'] in wallet_address:
+                                    value = value + output['value']
                     # Sum value of output field should be bigger than reward policy pool.
                     if value >= Configuration.objects.REWARD * Configuration.objects.REWARD_FACTOR * pow(10, 9):
                         logger.info('Transaction is valid.')

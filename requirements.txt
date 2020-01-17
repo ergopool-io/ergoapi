@@ -3,3 +3,4 @@ requests>=2.22,<2.23
 psycopg2-binary>=2.8,<2.9
 djangorestframework>=3.10,<3.11
 ECPy==0.10.0
+coverage==5.0.2
