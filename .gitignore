@@ -7,3 +7,4 @@ ErgoApi/production.py
 .venv/*
 static/*
 .important.log
+.coverage
