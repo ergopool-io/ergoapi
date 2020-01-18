@@ -1,13 +1,25 @@
-from django.db import models
+from pydoc import locate
 
-KEY_CHOICES = (
+from django.db import models
+import logging
+
+logger = logging.getLogger(__name__)
+
+CONFIGURATION_KEY_CHOICE = (
     ("POOL_BASE_FACTOR", "Pool base factor"),
     ("REWARD", "Reward"),
     ("REWARD_FACTOR", "Reward factor"),
     ("SHARE_CHUNK_SIZE", "Share chunk size")
 )
 
-DEFAULT_KEY_VALUES = {
+CONFIGURATION_KEY_TO_TYPE = {
+    'POOL_BASE_FACTOR': 'int',
+    'REWARD': 'float',
+    'REWARD_FACTOR': 'float',
+    'SHARE_CHUNK_SIZE': 'int'
+}
+
+CONFIGURATION_DEFAULT_KEY_VALUE = {
     'POOL_BASE_FACTOR': 1000,
     'REWARD': 67.5,
     'REWARD_FACTOR': 1,
@@ -32,19 +44,32 @@ class ConfigurationManager(models.Manager):
         :param attr:
         :return:
         """
-        if attr in [key for (key, temp) in KEY_CHOICES]:
+        if attr in [key for (key, temp) in CONFIGURATION_KEY_CHOICE]:
             configurations = dict(self.all().values_list('key', 'value'))
             if attr in configurations:
-                return configurations[attr]
-            else:
-                return DEFAULT_KEY_VALUES[attr]
+                val = configurations[attr]
+                val_type = CONFIGURATION_KEY_TO_TYPE[attr]
+
+                # trying to convert value to value_type
+                try:
+                    val = locate(val_type)(val)
+                    return val
+
+                except:
+                    # failed to convert, return default value
+                    logger.error('Problem in configuration; {} with value {} is not compatible with type {}'
+                                 .format(attr, val, val_type))
+                    return CONFIGURATION_DEFAULT_KEY_VALUE[attr]
+
+            return CONFIGURATION_DEFAULT_KEY_VALUE[attr]
+
         else:
             return super(ConfigurationManager, self).__getattribute__(attr)
 
 
 class Configuration(models.Model):
-    key = models.CharField(max_length=255, choices=KEY_CHOICES, blank=False)
-    value = models.FloatField(default=0)
+    key = models.CharField(max_length=255, choices=CONFIGURATION_KEY_CHOICE, blank=False)
+    value = models.CharField(max_length=255, blank=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
