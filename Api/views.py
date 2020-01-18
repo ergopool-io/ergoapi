@@ -202,7 +202,7 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet,
         :param pk: if this parameter set return list miner specific configuration otherwise return general configuration
         :return: a json contain all configuration
         """
-        result = CONFIGURATION_DEFAULT_KEY_VALUE.copy()
+        result = dict(CONFIGURATION_DEFAULT_KEY_VALUE)
         config = Configuration.objects.all()
         for x in config.values_list('key', flat=True):
             val_type = CONFIGURATION_KEY_TO_TYPE[x]
