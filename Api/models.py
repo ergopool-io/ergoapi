@@ -1,6 +1,7 @@
 from pydoc import locate
 
 from django.db import models
+from frozendict import frozendict
 import logging
 
 logger = logging.getLogger(__name__)
@@ -12,19 +13,19 @@ CONFIGURATION_KEY_CHOICE = (
     ("SHARE_CHUNK_SIZE", "Share chunk size")
 )
 
-CONFIGURATION_KEY_TO_TYPE = {
+CONFIGURATION_KEY_TO_TYPE = frozendict({
     'POOL_BASE_FACTOR': 'int',
     'REWARD': 'float',
     'REWARD_FACTOR': 'float',
     'SHARE_CHUNK_SIZE': 'int'
-}
+})
 
-CONFIGURATION_DEFAULT_KEY_VALUE = {
+CONFIGURATION_DEFAULT_KEY_VALUE = frozendict({
     'POOL_BASE_FACTOR': 1000,
     'REWARD': 67.5,
     'REWARD_FACTOR': 1,
     'SHARE_CHUNK_SIZE': 10
-}
+})
 
 
 class Block(models.Model):
