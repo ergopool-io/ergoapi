@@ -1,5 +1,6 @@
 import struct
 from codecs import decode
+from pydoc import locate
 from unittest.mock import patch, call
 from urllib.parse import urljoin
 
@@ -9,7 +10,8 @@ from django.test.testcases import TransactionTestCase, TestCase
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient
 
-from Api.models import Block, CONFIGURATION_KEY_CHOICE, Configuration, CONFIGURATION_DEFAULT_KEY_VALUE
+from Api.models import Block, CONFIGURATION_KEY_CHOICE, Configuration, CONFIGURATION_DEFAULT_KEY_VALUE, \
+    CONFIGURATION_KEY_TO_TYPE
 from Api.serializers import ShareSerializer
 from ErgoApi.settings import ACCOUNTING_URL
 
@@ -661,16 +663,10 @@ class ConfigurationManageApiTest(TestCase):
 
         url = args[0]
         if url == urljoin(ACCOUNTING_URL, 'conf/'):
-            return MockResponse([
-                {
-                    'key': 'some_key',
-                    'value': 1
-                },
-                {
-                    'key': CONFIGURATION_KEY_CHOICE[0][0],
-                    'value': 1
-                },
-            ], 200)
+            return MockResponse({
+                    'some_key': 1,
+                    CONFIGURATION_KEY_CHOICE[0][0]: 1
+            }, 200)
 
         return None
 
@@ -733,12 +729,14 @@ class ConfigurationManageApiTest(TestCase):
         # retrieve all possible keys for KEY_CHOICES
         keys = [key for (key, temp) in CONFIGURATION_KEY_CHOICE]
         # define expected response as an empty list
-        expected_response = []
+        expected_response = dict(CONFIGURATION_DEFAULT_KEY_VALUE)
         # create a json like dictionary for any key in keys
         for key in keys:
             Configuration.objects.create(key=key, value='1')
-            expected_response.append({'key': key, 'value': '1'})
-        expected_response.append({'key': 'some_key', 'value': '1'})
+            val_type = CONFIGURATION_KEY_TO_TYPE[key]
+            expected_response[key] = locate(val_type)('1')
+
+        expected_response['some_key'] = 1
         # send a http 'get' request to the configuration endpoint
         response = self.client.get('/api/config/manage/')
         # check the status of the response
@@ -746,8 +744,6 @@ class ConfigurationManageApiTest(TestCase):
         # check the content of the response
         response = response.json()
         self.assertEqual(response, expected_response)
-        self.assertEqual(response.count({'key': CONFIGURATION_KEY_CHOICE[0][0], 'value': '1'}), 1)
-        self.assertTrue(mocked_requests_options.called)
 
     @patch('requests.post')
     @patch('requests.get', side_effect=mocked_requests_get)
