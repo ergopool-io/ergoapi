@@ -7,13 +7,14 @@ from django.views import View
 from rest_framework import viewsets, mixins, status
 from rest_framework.response import Response
 from rest_framework import filters
-from rest_framework.authentication import SessionAuthentication
+from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
 import logging
 from urllib.parse import urljoin, urlencode, urlparse, parse_qsl, urlunparse
 
 from Api import serializers
-from Api.models import Block, Configuration, DEFAULT_KEY_VALUES
+from Api.models import Block, Configuration, DEFAULT_KEY_VALUES, KEY_CHOICES
+from Api.serializers import ConfigurationSerializer
 from Api.utils.general import General
 
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL")
@@ -109,7 +110,7 @@ class ConfigurationViewSet(viewsets.GenericViewSet,
                            mixins.CreateModelMixin,
                            mixins.ListModelMixin):
     # For session authentication
-    authentication_classes = [SessionAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     # For token authentication
     permission_classes = (IsAuthenticated,)
     serializer_class = serializers.ConfigurationSerializer
@@ -128,13 +129,40 @@ class ConfigurationViewSet(viewsets.GenericViewSet,
         """
         key = serializer.validated_data['key']
         value = serializer.validated_data['value']
-        configurations = Configuration.objects.filter(key=key)
-        if not configurations:
-            serializer.save()
-        else:
-            configuration = Configuration.objects.get(key=key)
-            configuration.value = value
-            configuration.save()
+        if key in [x[0] for x in KEY_CHOICES]:
+            configurations = Configuration.objects.filter(key=key)
+            if not configurations:
+                serializer.save()
+            else:
+                configuration = Configuration.objects.get(key=key)
+                configuration.value = value
+                configuration.save()
+
+        try:
+            if key in serializer.accounting_choices:
+                requests.post(urljoin(ACCOUNTING, 'conf/'), data={'key': key, 'value': value})
+
+        except requests.exceptions.RequestException:
+            logger.critical('Could not connect to accounting!')
+
+    def list(self, request, *args, **kwargs):
+        queryset = Configuration.objects.all()
+        configs = {x.key: x.value for x in queryset}
+        res = None
+
+        try:
+            res = requests.get(urljoin(ACCOUNTING, 'conf/'))
+
+        except requests.exceptions.RequestException:
+            logger.critical('Could not connect to accounting!')
+
+        if res and res.status_code == status.HTTP_200_OK:
+            res = res.json()
+            for config in res:
+                configs[config['key']] = config['value']
+
+        serializer = ConfigurationSerializer([Configuration(key=key, value=value) for key, value in configs.items()], many=True)
+        return Response(serializer.data)
 
 
 class ConfigurationValueViewSet(viewsets.GenericViewSet,
