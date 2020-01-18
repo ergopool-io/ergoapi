@@ -9,7 +9,7 @@ from Api import views
 
 ACCOUNTING_URL = getattr(settings, "ACCOUNTING_URL")
 ACCOUNTING_API_IGNORE = getattr(settings, "ACCOUNTING_API_IGNORE")
-ACCOUNTING_API_PREFIX= getattr(settings, "ACCOUNTING_API_PREFIX")
+ACCOUNTING_API_PREFIX = getattr(settings, "ACCOUNTING_API_PREFIX")
 
 logger = logging.getLogger(__name__)
 
