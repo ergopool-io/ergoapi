@@ -136,7 +136,6 @@ class ConfigurationViewSet(viewsets.GenericViewSet,
                 locate(val_type)(value)
 
             except:
-                # failed to convert, return default value
                 return
 
             configurations = Configuration.objects.filter(key=key)
