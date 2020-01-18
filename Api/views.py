@@ -1,4 +1,5 @@
 import os
+from pydoc import locate
 
 import requests
 from django.conf import settings
@@ -13,7 +14,7 @@ import logging
 from urllib.parse import urljoin, urlencode, urlparse, parse_qsl, urlunparse
 
 from Api import serializers
-from Api.models import Block, Configuration, DEFAULT_KEY_VALUES, KEY_CHOICES
+from Api.models import Block, Configuration, CONFIGURATION_DEFAULT_KEY_VALUE, CONFIGURATION_KEY_CHOICE, CONFIGURATION_KEY_TO_TYPE
 from Api.serializers import ConfigurationSerializer
 from Api.utils.general import General
 
@@ -129,7 +130,15 @@ class ConfigurationViewSet(viewsets.GenericViewSet,
         """
         key = serializer.validated_data['key']
         value = serializer.validated_data['value']
-        if key in [x[0] for x in KEY_CHOICES]:
+        if key in [x[0] for x in CONFIGURATION_KEY_CHOICE]:
+            val_type = CONFIGURATION_KEY_TO_TYPE[key]
+            try:
+                locate(val_type)(value)
+
+            except:
+                # failed to convert, return default value
+                return
+
             configurations = Configuration.objects.filter(key=key)
             if not configurations:
                 serializer.save()
@@ -147,7 +156,10 @@ class ConfigurationViewSet(viewsets.GenericViewSet,
 
     def list(self, request, *args, **kwargs):
         queryset = Configuration.objects.all()
-        configs = {x.key: x.value for x in queryset}
+        configs = {
+            x.key: x.value
+            for x in queryset
+        }
         res = None
 
         try:
@@ -190,10 +202,11 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet,
         :param pk: if this parameter set return list miner specific configuration otherwise return general configuration
         :return: a json contain all configuration
         """
-        result = DEFAULT_KEY_VALUES.copy()
+        result = CONFIGURATION_DEFAULT_KEY_VALUE.copy()
         config = Configuration.objects.all()
         for x in config.values_list('key', flat=True):
-            result[x] = config.get(key=x).value
+            val_type = CONFIGURATION_KEY_TO_TYPE[x]
+            result[x] = locate(val_type)(config.get(key=x).value)
         reward = int(result['REWARD'] * result['REWARD_FACTOR'] * pow(10, 9))
         data_node = General.node_request('wallet/addresses', {'accept': 'application/json', 'api_key': settings.API_KEY})
         if data_node['status'] == '400':
