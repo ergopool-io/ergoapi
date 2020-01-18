@@ -154,13 +154,15 @@ class ConfigurationViewSet(viewsets.GenericViewSet,
             logger.critical('Could not connect to accounting!')
 
     def list(self, request, *args, **kwargs):
-        queryset = Configuration.objects.all()
-        configs = {
-            x.key: x.value
-            for x in queryset
-        }
-        res = None
+        """
+        overrides list method to return list of key: value instead of list of dicts
+        """
+        configs = dict(CONFIGURATION_DEFAULT_KEY_VALUE)
+        for conf in Configuration.objects.all():
+            val_type = CONFIGURATION_KEY_TO_TYPE[conf.key]
+            configs[conf.key] = locate(val_type)(conf.value)
 
+        res = None
         try:
             res = requests.get(urljoin(ACCOUNTING, 'conf/'))
 
@@ -169,11 +171,10 @@ class ConfigurationViewSet(viewsets.GenericViewSet,
 
         if res and res.status_code == status.HTTP_200_OK:
             res = res.json()
-            for config in res:
-                configs[config['key']] = config['value']
+            for key, value in res.items():
+                configs[key] = value
 
-        serializer = ConfigurationSerializer([Configuration(key=key, value=value) for key, value in configs.items()], many=True)
-        return Response(serializer.data)
+        return Response(configs, status=status.HTTP_200_OK)
 
 
 class ConfigurationValueViewSet(viewsets.GenericViewSet,
