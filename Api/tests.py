@@ -1,12 +1,15 @@
+from urllib.parse import urljoin
+
 from django.test.testcases import TransactionTestCase, TestCase
 from django.test.client import RequestFactory
 from rest_framework.test import APIClient
-from unittest.mock import patch
+from unittest.mock import patch, call
 from Api.models import Block, KEY_CHOICES, Configuration, DEFAULT_KEY_VALUES
 from codecs import decode
 from django.contrib.auth.models import User
 from Api.serializers import ShareSerializer
 from rest_framework.exceptions import ValidationError
+from ErgoApi.settings import ACCOUNTING_URL
 import struct
 
 
@@ -642,11 +645,77 @@ class ConfigurationManageApiTest(TestCase):
     3) using http 'post' method to update an existing configuration
     """
 
+    def mocked_requests_get(*args, **kwargs):
+        """
+        mock function requests.get
+        """
+
+        class MockResponse:
+            def __init__(self, json_data, status_code):
+                self.json_data = json_data
+                self.status_code = status_code
+
+            def json(self):
+                return self.json_data
+
+        url = args[0]
+        if url == urljoin(ACCOUNTING_URL, 'conf/'):
+            return MockResponse([
+                {
+                    'key': 'some_key',
+                    'value': 1
+                },
+                {
+                    'key': KEY_CHOICES[0][0],
+                    'value': 1
+                },
+            ], 200)
+
+        return None
+
+    def mocked_requests_options(*args, **kwargs):
+        """
+        mock function requests.get
+        """
+
+        class MockResponse:
+            def __init__(self, json_data, status_code):
+                self.json_data = json_data
+                self.status_code = status_code
+
+            def json(self):
+                return self.json_data
+
+        url = args[0]
+        if url == urljoin(ACCOUNTING_URL, 'conf/'):
+            return MockResponse({
+                "actions": {
+                    "POST": {
+                        "key": {
+                            "choices": [
+                                {
+                                    "value": "some_key",
+                                    "display_name": "some key"
+                                },
+                                {
+                                    "value": KEY_CHOICES[0][0],
+                                    "display_name": "not important"
+                                }
+                            ]
+                        },
+                    }
+                }
+            }, 200)
+
+        return None
+
     def setUp(self):
         self.factory = RequestFactory()
         User.objects.create_user(username='test', password='test')
 
-    def test_configuration_Api_get_method_list(self):
+    @patch('requests.get', side_effect=mocked_requests_get)
+    @patch('requests.options', side_effect=mocked_requests_options)
+    def test_configuration_Api_get_method_list(self, mocked_requests_options, mocked_requests_get):
         """
         In this scenario we want to test the functionality of Configuration API when
         it is called by a http 'get' method.
@@ -654,6 +723,7 @@ class ConfigurationManageApiTest(TestCase):
         we send a http 'get' method to retrieve a list of them.
         We expect that the status code of response be '200 ok' and
         the json format of response be as below (a list of dictionaries).
+        one key is also present in accounting
         :return:
         """
         # Authorize for request /api/config/manage session
@@ -667,14 +737,22 @@ class ConfigurationManageApiTest(TestCase):
         for key in keys:
             Configuration.objects.create(key=key, value=1)
             expected_response.append({'key': key, 'value': 1.0})
+        expected_response.append({'key': 'some_key', 'value': 1})
         # send a http 'get' request to the configuration endpoint
         response = self.client.get('/api/config/manage/')
         # check the status of the response
         self.assertEqual(response.status_code, 200)
         # check the content of the response
-        self.assertEqual(response.json(), expected_response)
+        response = response.json()
+        self.assertEqual(response, expected_response)
+        self.assertEqual(response.count({'key': KEY_CHOICES[0][0], 'value': 1.0}), 1)
+        self.assertTrue(mocked_requests_options.called)
 
-    def test_configuration_api_post_method_create(self):
+    @patch('requests.post')
+    @patch('requests.get', side_effect=mocked_requests_get)
+    @patch('requests.options', side_effect=mocked_requests_options)
+    def test_configuration_api_post_method_create(self, mocked_requests_options, mocked_requests_get,
+                                                  mocked_requests_post):
         """
         In this scenario we want to test the functionality of Configuration API when
         it is called by a http 'post' method to create a new configuration
@@ -701,7 +779,13 @@ class ConfigurationManageApiTest(TestCase):
             # check the value of the new created object
             self.assertEqual(configuration.value, 1)
 
-    def test_configuration_api_post_method_update(self):
+        mocked_requests_post.assert_called_once()
+
+    @patch('requests.post')
+    @patch('requests.get', side_effect=mocked_requests_get)
+    @patch('requests.options', side_effect=mocked_requests_options)
+    def test_configuration_api_post_method_update(self, mocked_requests_options, mocked_requests_get,
+                                                  mocked_requests_post):
         """
         In this scenario we want to test the functionality of Configuration API when
         it is called by a http 'post' method to update an existing configuration.
@@ -729,6 +813,25 @@ class ConfigurationManageApiTest(TestCase):
             self.assertEqual(configurations.count(), 1)
             # check the value of the new created object
             self.assertEqual(configurations.first().value, 2)
+
+        mocked_requests_post.assert_called_once()
+
+    @patch('requests.post')
+    @patch('requests.get', side_effect=mocked_requests_get)
+    @patch('requests.options', side_effect=mocked_requests_options)
+    def test_configuration_api_post_accounting(self, mocked_requests_options, mocked_requests_get,
+                                               mocked_requests_post):
+        """
+        int this scenario we set a key which is present in accounting
+        :return:
+        """
+        # Authorize for request /api/config/manage session
+        self.client = APIClient()
+        self.client.login(username='test', password='test')
+        key = 'some_key'
+        self.client.post('/api/config/manage/', {'key': key, 'value': 2})
+        self.assertEqual(Configuration.objects.filter(key=key).count(), 0)
+        mocked_requests_post.assert_has_calls([call(urljoin(ACCOUNTING_URL, 'conf/'), data={'key': key, 'value': 2})])
 
     def tearDown(self):
         """
