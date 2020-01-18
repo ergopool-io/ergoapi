@@ -1,16 +1,17 @@
+import struct
+from codecs import decode
+from unittest.mock import patch, call
 from urllib.parse import urljoin
 
-from django.test.testcases import TransactionTestCase, TestCase
-from django.test.client import RequestFactory
-from rest_framework.test import APIClient
-from unittest.mock import patch, call
-from Api.models import Block, KEY_CHOICES, Configuration, DEFAULT_KEY_VALUES
-from codecs import decode
 from django.contrib.auth.models import User
-from Api.serializers import ShareSerializer
+from django.test.client import RequestFactory
+from django.test.testcases import TransactionTestCase, TestCase
 from rest_framework.exceptions import ValidationError
+from rest_framework.test import APIClient
+
+from Api.models import Block, CONFIGURATION_KEY_CHOICE, Configuration, CONFIGURATION_DEFAULT_KEY_VALUE
+from Api.serializers import ShareSerializer
 from ErgoApi.settings import ACCOUNTING_URL
-import struct
 
 
 class TransactionValidateApiTest(TransactionTestCase):
@@ -68,7 +69,7 @@ class TransactionValidateApiTest(TransactionTestCase):
                 "status": "External Error",
                 "response": "External Error"
             }
-    
+
     def mocked_node_request_external_error_utils_ergo_tree_to_address(*args, **kwargs):
         """
         mock function node_request for urls 'transactions/check', 'wallet/addresses' and 'utils/ergoTreeToAddress/'
@@ -666,7 +667,7 @@ class ConfigurationManageApiTest(TestCase):
                     'value': 1
                 },
                 {
-                    'key': KEY_CHOICES[0][0],
+                    'key': CONFIGURATION_KEY_CHOICE[0][0],
                     'value': 1
                 },
             ], 200)
@@ -698,7 +699,7 @@ class ConfigurationManageApiTest(TestCase):
                                     "display_name": "some key"
                                 },
                                 {
-                                    "value": KEY_CHOICES[0][0],
+                                    "value": CONFIGURATION_KEY_CHOICE[0][0],
                                     "display_name": "not important"
                                 }
                             ]
@@ -730,14 +731,14 @@ class ConfigurationManageApiTest(TestCase):
         self.client = APIClient()
         self.client.login(username='test', password='test')
         # retrieve all possible keys for KEY_CHOICES
-        keys = [key for (key, temp) in KEY_CHOICES]
+        keys = [key for (key, temp) in CONFIGURATION_KEY_CHOICE]
         # define expected response as an empty list
         expected_response = []
         # create a json like dictionary for any key in keys
         for key in keys:
-            Configuration.objects.create(key=key, value=1)
-            expected_response.append({'key': key, 'value': 1.0})
-        expected_response.append({'key': 'some_key', 'value': 1})
+            Configuration.objects.create(key=key, value='1')
+            expected_response.append({'key': key, 'value': '1'})
+        expected_response.append({'key': 'some_key', 'value': '1'})
         # send a http 'get' request to the configuration endpoint
         response = self.client.get('/api/config/manage/')
         # check the status of the response
@@ -745,7 +746,7 @@ class ConfigurationManageApiTest(TestCase):
         # check the content of the response
         response = response.json()
         self.assertEqual(response, expected_response)
-        self.assertEqual(response.count({'key': KEY_CHOICES[0][0], 'value': 1.0}), 1)
+        self.assertEqual(response.count({'key': CONFIGURATION_KEY_CHOICE[0][0], 'value': '1'}), 1)
         self.assertTrue(mocked_requests_options.called)
 
     @patch('requests.post')
@@ -765,11 +766,11 @@ class ConfigurationManageApiTest(TestCase):
         self.client = APIClient()
         self.client.login(username='test', password='test')
         # retrieve all possible keys for KEY_CHOICES
-        keys = [key for (key, temp) in KEY_CHOICES]
+        keys = [key for (key, temp) in CONFIGURATION_KEY_CHOICE]
         # send http 'post' request to the configuration endpoint and validate the result
         for key in keys:
             # send http 'post' request to the endpoint
-            response = self.client.post('/api/config/manage/', {'key': key, 'value': 1})
+            response = self.client.post('/api/config/manage/', {'key': key, 'value': '1'})
             # check the status of the response
             self.assertEqual(response.status_code, 201)
             # retrieve the new created configuration from database
@@ -777,7 +778,7 @@ class ConfigurationManageApiTest(TestCase):
             # check whether the above object is created and saved to database or not
             self.assertIsNotNone(configuration)
             # check the value of the new created object
-            self.assertEqual(configuration.value, 1)
+            self.assertEqual(configuration.value, '1')
 
         mocked_requests_post.assert_called_once()
 
@@ -798,13 +799,13 @@ class ConfigurationManageApiTest(TestCase):
         self.client = APIClient()
         self.client.login(username='test', password='test')
         # retrieve all possible keys for KEY_CHOICES
-        keys = [key for (key, temp) in KEY_CHOICES]
+        keys = [key for (key, temp) in CONFIGURATION_KEY_CHOICE]
         # send http 'post' request to the configuration endpoint and validate the result
         for key in keys:
             # create a configuration object to check the functionality of 'post' method
             Configuration.objects.create(key=key, value=1)
             # send http 'post' request to the endpoint
-            response = self.client.post('/api/config/manage/', {'key': key, 'value': 2})
+            response = self.client.post('/api/config/manage/', {'key': key, 'value': '2'})
             # check the status of the response
             self.assertEqual(response.status_code, 201)
             # retrieve the new created configuration from database
@@ -812,7 +813,7 @@ class ConfigurationManageApiTest(TestCase):
             # check whether the above object is created and saved to database or not
             self.assertEqual(configurations.count(), 1)
             # check the value of the new created object
-            self.assertEqual(configurations.first().value, 2)
+            self.assertEqual(configurations.first().value, '2')
 
         mocked_requests_post.assert_called_once()
 
@@ -829,9 +830,9 @@ class ConfigurationManageApiTest(TestCase):
         self.client = APIClient()
         self.client.login(username='test', password='test')
         key = 'some_key'
-        self.client.post('/api/config/manage/', {'key': key, 'value': 2})
+        self.client.post('/api/config/manage/', {'key': key, 'value': '2'})
         self.assertEqual(Configuration.objects.filter(key=key).count(), 0)
-        mocked_requests_post.assert_has_calls([call(urljoin(ACCOUNTING_URL, 'conf/'), data={'key': key, 'value': 2})])
+        mocked_requests_post.assert_has_calls([call(urljoin(ACCOUNTING_URL, 'conf/'), data={'key': key, 'value': '2'})])
 
     def tearDown(self):
         """
@@ -876,9 +877,11 @@ class ConfigurationValueApiTest(TransactionTestCase):
         Configuration.objects.all().delete()
         # response of API /config/value should be this
         result = {
-            "reward": int(DEFAULT_KEY_VALUES['REWARD'] * DEFAULT_KEY_VALUES['REWARD_FACTOR'] * pow(10, 9)),
+            "reward": int(
+                CONFIGURATION_DEFAULT_KEY_VALUE['REWARD'] * CONFIGURATION_DEFAULT_KEY_VALUE['REWARD_FACTOR'] * pow(10,
+                                                                                                                   9)),
             "wallet_address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM",
-            "pool_base_factor": DEFAULT_KEY_VALUES['POOL_BASE_FACTOR'],
+            "pool_base_factor": CONFIGURATION_DEFAULT_KEY_VALUE['POOL_BASE_FACTOR'],
             "max_chunk_size": 10,
         }
         # send a http 'get' request to the configuration endpoint
@@ -924,7 +927,7 @@ class ConfigurationValueApiTest(TransactionTestCase):
         this test set all config in database and want get values that set in database for config
         :return:
         """
-        for key in KEY_CHOICES:
-            Configuration.objects.create(key=key[0], value=2000)
-        for key in KEY_CHOICES:
+        for key in CONFIGURATION_KEY_CHOICE:
+            Configuration.objects.create(key=key[0], value='2000')
+        for key in CONFIGURATION_KEY_CHOICE:
             self.assertEqual(getattr(Configuration.objects, key[0]), 2000)
