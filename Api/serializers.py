@@ -1,8 +1,11 @@
-from rest_framework import serializers
+from urllib.parse import urljoin
+
+import requests
+from rest_framework import serializers, status
 from rest_framework.exceptions import ValidationError
 from Api.models import Configuration, Block
 from Api.utils.general import General
-from ErgoApi.settings import API_KEY
+from ErgoApi.settings import API_KEY, ACCOUNTING_URL
 
 from codecs import decode
 from ecpy.curves import Curve
@@ -435,6 +438,32 @@ class ConfigurationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Configuration
         fields = ['key', 'value']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.accounting_choices = set()
+
+        # here we update the choices by appending the choices of accounting
+        curr_choices = dict(self.fields['key'].grouped_choices)
+
+        try:
+            res = requests.options(urljoin(ACCOUNTING_URL, 'conf/'))
+
+        except requests.exceptions.RequestException:
+            logger.critical('Could not connect to accounting!')
+            return
+
+        if res.status_code != status.HTTP_200_OK:
+            return
+
+        res = res.json()
+        for choice in res['actions']['POST']['key']['choices']:
+            curr_choices[choice['value']] = choice['display_name']
+            self.accounting_choices.add(choice['value'])
+
+        curr_choices = {(key, value) for key, value in curr_choices.items()}
+        self.fields['key'].grouped_choices = curr_choices
+        self.fields['key'].choices = curr_choices
 
 
 class ConfigurationValueSerializer(serializers.Serializer):
