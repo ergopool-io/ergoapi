@@ -660,16 +660,10 @@ class ConfigurationManageApiTest(TestCase):
 
         url = args[0]
         if url == urljoin(ACCOUNTING_URL, 'conf/'):
-            return MockResponse([
-                {
-                    'key': 'some_key',
-                    'value': 1
-                },
-                {
-                    'key': KEY_CHOICES[0][0],
-                    'value': 1
-                },
-            ], 200)
+            return MockResponse({
+                    'some_key': 1,
+                    KEY_CHOICES[0][0]: 1
+            }, 200)
 
         return None
 
@@ -732,12 +726,12 @@ class ConfigurationManageApiTest(TestCase):
         # retrieve all possible keys for KEY_CHOICES
         keys = [key for (key, temp) in KEY_CHOICES]
         # define expected response as an empty list
-        expected_response = []
+        expected_response = {}
         # create a json like dictionary for any key in keys
         for key in keys:
             Configuration.objects.create(key=key, value=1)
-            expected_response.append({'key': key, 'value': 1.0})
-        expected_response.append({'key': 'some_key', 'value': 1})
+            expected_response[key] = 1.0
+        expected_response['some_key'] = 1.0
         # send a http 'get' request to the configuration endpoint
         response = self.client.get('/api/config/manage/')
         # check the status of the response
@@ -745,7 +739,6 @@ class ConfigurationManageApiTest(TestCase):
         # check the content of the response
         response = response.json()
         self.assertEqual(response, expected_response)
-        self.assertEqual(response.count({'key': KEY_CHOICES[0][0], 'value': 1.0}), 1)
         self.assertTrue(mocked_requests_options.called)
 
     @patch('requests.post')

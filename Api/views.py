@@ -158,11 +158,17 @@ class ConfigurationViewSet(viewsets.GenericViewSet,
 
         if res and res.status_code == status.HTTP_200_OK:
             res = res.json()
-            for config in res:
-                configs[config['key']] = config['value']
+            for key, value in res.items():
+                configs[key] = value
 
         serializer = ConfigurationSerializer([Configuration(key=key, value=value) for key, value in configs.items()], many=True)
-        return Response(serializer.data)
+        res = Response(serializer.data)
+
+        config = {}
+        for conf in res.data:
+            config[conf['key']] = conf['value']
+
+        return Response(config, status=status.HTTP_200_OK)
 
 
 class ConfigurationValueViewSet(viewsets.GenericViewSet,
