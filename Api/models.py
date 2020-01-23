@@ -8,22 +8,26 @@ logger = logging.getLogger(__name__)
 
 CONFIGURATION_KEY_CHOICE = (
     ("POOL_BASE_FACTOR", "Pool base factor"),
-    ("REWARD", "Reward"),
+    ("TOTAL_REWARD", "Reward"),
+    # pool reward factor result precision
+    ("REWARD_FACTOR_PRECISION", "Reward factor precision"),
     ("REWARD_FACTOR", "Reward factor"),
     ("SHARE_CHUNK_SIZE", "Share chunk size")
 )
 
 CONFIGURATION_KEY_TO_TYPE = frozendict({
     'POOL_BASE_FACTOR': 'int',
-    'REWARD': 'float',
+    'TOTAL_REWARD': 'int',
+    "REWARD_FACTOR_PRECISION": "int",
     'REWARD_FACTOR': 'float',
     'SHARE_CHUNK_SIZE': 'int'
 })
 
 CONFIGURATION_DEFAULT_KEY_VALUE = frozendict({
     'POOL_BASE_FACTOR': 1000,
-    'REWARD': 67.5,
-    'REWARD_FACTOR': 1,
+    'TOTAL_REWARD': int(67.5e9),
+    "REWARD_FACTOR_PRECISION": 2,
+    'REWARD_FACTOR': 0.96296297,
     'SHARE_CHUNK_SIZE': 10
 })
 
