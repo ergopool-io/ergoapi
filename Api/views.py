@@ -207,14 +207,17 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet,
         for x in config.values_list('key', flat=True):
             val_type = CONFIGURATION_KEY_TO_TYPE[x]
             result[x] = locate(val_type)(config.get(key=x).value)
-        reward = int(result['REWARD'] * result['REWARD_FACTOR'] * pow(10, 9))
+
+        PRECISION = Configuration.objects.REWARD_FACTOR_PRECISION
+        REWARD = round((result['TOTAL_REWARD'] / 1e9) * result['REWARD_FACTOR'], PRECISION)
+        REWARD = int(REWARD * 1e9)
         data_node = General.node_request('wallet/addresses', {'accept': 'application/json', 'api_key': settings.API_KEY})
         if data_node['status'] == '400':
             return data_node
         else:
             wallet_address = data_node.get('response')[0]
         return {
-            'reward': reward,
+            'reward': REWARD,
             'wallet_address': wallet_address,
             'pool_base_factor': result['POOL_BASE_FACTOR'],
             'max_chunk_size': result['SHARE_CHUNK_SIZE'],
