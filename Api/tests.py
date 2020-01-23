@@ -872,10 +872,11 @@ class ConfigurationValueApiTest(TransactionTestCase):
         # Remove all objects from the database for that check if an object there isn't in the database set default value
         Configuration.objects.all().delete()
         # response of API /config/value should be this
+        PRECISION = Configuration.objects.REWARD_FACTOR_PRECISION
+        REWARD = round((CONFIGURATION_DEFAULT_KEY_VALUE['TOTAL_REWARD'] / 1e9) * CONFIGURATION_DEFAULT_KEY_VALUE['REWARD_FACTOR'], PRECISION)
+        REWARD = int(REWARD * 1e9)
         result = {
-            "reward": int(
-                CONFIGURATION_DEFAULT_KEY_VALUE['REWARD'] * CONFIGURATION_DEFAULT_KEY_VALUE['REWARD_FACTOR'] * pow(10,
-                                                                                                                   9)),
+            "reward": REWARD,
             "wallet_address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM",
             "pool_base_factor": CONFIGURATION_DEFAULT_KEY_VALUE['POOL_BASE_FACTOR'],
             "max_chunk_size": 10,
@@ -899,13 +900,13 @@ class ConfigurationValueApiTest(TransactionTestCase):
         :return:
         """
         # Create Objects configuration in database
-        Configuration.objects.create(key='REWARD', value='40')
+        Configuration.objects.create(key='TOTAL_REWARD', value=str(int(40e9)))
         Configuration.objects.create(key='REWARD_FACTOR', value='1')
         Configuration.objects.create(key='POOL_BASE_FACTOR', value='1')
         Configuration.objects.create(key='SHARE_CHUNK_SIZE', value='20')
         # response of API /config/value should be this
         result = {
-            "reward": 40 * 1 * pow(10, 9),
+            "reward": int(40e9),
             "wallet_address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM",
             "pool_base_factor": 1,
             "max_chunk_size": 20,
