@@ -481,6 +481,219 @@ class ConfigurationValueSerializer(serializers.Serializer):
         pass
 
 
+class ValidateTransactionSerializer(serializers.Serializer, General):
+    transaction = serializers.JSONField()
+    status = serializers.CharField(required=False, read_only=True)
+    message = serializers.CharField(required=False, read_only=True)
+    tx_id = serializers.CharField(required=False, read_only=True)
+
+    def validate(self, attrs):
+        """
+        Validate transaction with request to node and check tx_id response of transactions/check with tx_id in
+         transaction json then get ergo_tree from output field and convert to address wallet and check with wallet
+         addresses in the event that wallet address was true check sum value of output field that be greater than reward
+        :return: status of transaction
+        """
+        response = {
+            'message': '',
+            'tx_id': ''
+        }
+        transaction = attrs['transaction']
+        attrs['transaction'] = ''
+        # Send request to node for validate transaction
+        data_node = self.node_request('transactions/check',
+                                      {'accept': 'application/json', 'content-type': 'application/json'},
+                                      data=transaction, request_type="post")
+        if data_node['status'] == 'External Error':
+            logger.error('Node failed to validate transaction')
+            raise ValidationError({
+                "message": data_node['response'],
+                "status": "failed"
+            })
+        else:
+            tx_id = data_node.get('response')
+            response['tx_id'] = tx_id
+            if tx_id == transaction['id']:
+                logger.info("Getting wallet addresses to validate transaction.")
+                # Send request to node for get list of wallet addresses
+                data_node = self.node_request('wallet/addresses',
+                                              {'accept': 'application/json', 'content-type': 'application/json',
+                                               'api_key': API_KEY})
+                if data_node['status'] == 'External Error':
+                    logger.error('Error while getting wallet addresses.')
+                    raise ValidationError({
+                        "message": data_node['response'],
+                        "status": "failed"
+                    })
+                else:
+                    wallet_address = data_node.get('response')
+                    value = 0
+                    if 'outputs' in transaction:
+                        for output in transaction['outputs']:
+                            # Send request to node for Generate Ergo address from hex-encoded ErgoTree
+                            data_node = self.node_request('utils/ergoTreeToAddress/' + output['ergoTree'],
+                                                          {'accept': 'application/json'})
+                            if data_node['status'] == 'External Error':
+                                raise ValidationError({
+                                    "message": data_node['response'],
+                                    "status": "failed"
+                                })
+                            # Check address after convert ergo tree that would have existed in the wallet_address
+                            elif data_node.get('response')['address'] in wallet_address:
+                                    value = value + output['value']
+                    # Sum value of output field should be bigger than reward policy pool.
+                    if value >= Configuration.objects.REWARD * Configuration.objects.REWARD_FACTOR * pow(10, 9):
+                        logger.info('Transaction is valid.')
+                        response['status'] = 'valid'
+                        response['message'] = "Transaction is valid"
+                    else:
+                        logger.error('Transaction is invalid, either wallet address is invalid or the value')
+                        raise ValidationError({"message": "Wallet address pool or value of transaction is invalid",
+                                               "status": "invalid"})
+            else:
+                logger.error('Transaction id is invalid.')
+                raise ValidationError({'message': 'tx_id is invalid', 'status': 'invalid'})
+        attrs.update(response)
+        return attrs
+
+    def update(self, instance, validated_data):
+        pass
+
+    def create(self, validated_data):
+        pass
+
+    class Meta:
+        fields = ['transaction', 'status', 'tx_id', 'message']
+
+
+class ValidateProofSerializer(serializers.Serializer):
+    pk = serializers.CharField()
+    msg_pre_image = serializers.CharField()
+    leaf = serializers.CharField()
+    levels = serializers.ListField(child=serializers.CharField())
+    msg = serializers.CharField(required=False, read_only=True)
+    message = serializers.CharField(required=False, read_only=True)
+    status = serializers.CharField(required=False, read_only=True)
+
+    def __merkle_proof__(self, leaf, levels_encoded, pk):
+        # tx_id is a "leaf" in a Merkle proof
+        tx_id = leaf
+        # Merkle proof element is encoded in the following way:
+        # - first, 1 byte showing whether COMPUTED value is on the right (1) or on the left (0)
+        # - second, 32 bytes of stored value
+        try:
+            levels = list(map(lambda le: [decode(le, "hex")[1:], decode(le, "hex")[0:1]], levels_encoded))
+        except ValueError as e:
+            logger.error("Levels input parameter in proof is not valid.")
+            logger.error(e)
+            raise ValidationError({
+                'pk': pk,
+                'message': 'Type of input is invalid',
+                'status': 'failed'
+            })
+        leaf_hash = General.blake(decode('00', "hex") + decode(tx_id, "hex"))
+        for level in levels:
+            if level[1] == decode('01', "hex"):
+                leaf_hash = General.blake(decode('01', "hex") + level[0] + leaf_hash)
+            elif level[1] == decode('00', "hex"):
+                leaf_hash = General.blake(decode('01', "hex") + leaf_hash + level[0])
+        return leaf_hash
+
+    def validate(self, attrs):
+        """
+         Merkle roof is constructed by given leaf data, leaf hash sibling and also siblings for parent nodes. Using this
+         data, it is possible to compute nodes on the path to root hash, and the hash itself. The picture of a proof
+         given below. In the picture, "^^" is leaf data(to compute leaf hash from), "=" values are to be computed,
+         "*" values are to be stored.
+
+         ........= Root
+         ..... /  \
+         .... *   =
+         ....... / \
+         ...... *   =
+         ......... /.\
+         .........*   =
+         ............ ^^
+        :return: status of merkle_proof
+        """
+        msg_pre_image_base16 = attrs['msg_pre_image']
+        leaf = attrs['leaf']
+        pk = attrs['pk'].lower()
+        levels_encoded = attrs['levels']
+        try:
+            msg_pre_image = decode(msg_pre_image_base16, "hex")
+        except ValueError as e:
+            logger.error("Proof input parameters are not valid.")
+            logger.error(e)
+            raise ValidationError({
+                'pk': pk,
+                'message': 'Type of input is invalid',
+                'status': 'failed'
+            })
+
+        # hash of "msg_pre_image" (which is a header without PoW) should be equal to "msg"
+        msg = General.blake(msg_pre_image, 'hex')
+        # Transactions Merkle tree digest is in bytes 65-96 (inclusive) of the unproven header
+        txs_root = msg_pre_image[65:97]
+        # Create Merkle Proof
+        leaf_hash = self.__merkle_proof__(leaf, levels_encoded, pk)
+        # Validate_merkle
+        if leaf_hash == txs_root:
+            logger.info('Proof is valid, updated the block for pk {}'.format(pk))
+            attrs.update({
+                'msg': msg,
+                'message': 'The proof is valid.',
+                'status': 'valid'
+            })
+            return attrs
+        else:
+            attrs.update({
+                'message': 'The proof is invalid.',
+                'status': 'invalid'
+            })
+            return attrs
+
+    def update(self, instance, validated_data):
+        pass
+
+    def create(self, validated_data):
+        pass
+
+    class Meta:
+        fields = ['pk', 'msg_pre_image', 'leaf', 'levels', 'message', 'status']
+
+
+class ValidationShareSerializer(serializers.Serializer, General):
+    pk = serializers.CharField()
+    w = serializers.CharField()
+    nonce = serializers.CharField()
+    d = serializers.CharField()
+
+    def validate_d(self, value):
+        try:
+            return int(value)
+        except:
+            raise ValidationError("invalid number entered")
+
+    def update(self, instance, validated_data):
+        pass
+
+    def create(self, validated_data):
+        pass
+
+    class Meta:
+        fields = ['pk', 'w', 'nonce', 'd']
+
+
+class ValidationSerializer(serializers.Serializer):
+    transaction = ValidateTransactionSerializer(many=False)
+    proof = ValidateProofSerializer(many=False)
+    share = ValidationShareSerializer(many=True)
+
+    class Meta:
+        fields = ['transaction', 'proof', 'share']
+
+
 def builder_serializer(options):
     # Define types of field
     fields_type = {

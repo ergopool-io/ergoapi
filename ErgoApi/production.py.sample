@@ -69,3 +69,5 @@ LOGGING = {
     }
 }
 
+# set your approprate broker url, e.g, rabbitmq or redis
+CELERY_BROKER_URL = 'amqp://guest:guest@localhost:5672//'

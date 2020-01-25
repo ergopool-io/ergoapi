@@ -12,8 +12,10 @@ from rest_framework.test import APIClient
 
 from Api.models import Block, CONFIGURATION_KEY_CHOICE, Configuration, CONFIGURATION_DEFAULT_KEY_VALUE, \
     CONFIGURATION_KEY_TO_TYPE
-from Api.serializers import ShareSerializer
+from Api.serializers import ShareSerializer, ValidationShareSerializer, ValidateTransactionSerializer,\
+    ValidateProofSerializer
 from ErgoApi.settings import ACCOUNTING_URL
+from Api.utils.share import ValidateShare
 
 
 class TransactionValidateApiTest(TransactionTestCase):
@@ -927,3 +929,582 @@ class ConfigurationValueApiTest(TransactionTestCase):
             Configuration.objects.create(key=key[0], value='2000')
         for key in CONFIGURATION_KEY_CHOICE:
             self.assertEqual(getattr(Configuration.objects, key[0]), 2000)
+
+
+class TestValidateShare(TransactionTestCase):
+    reset_sequences = True
+
+    def mocked_node_request(*args, **kwargs):
+        """
+        mock function node_request for urls and 'info'
+        """
+        if args[0] == "info":
+            return {
+                "status": "success",
+                "response": {
+                    "headersHeight": 41496,
+                    "difficulty": Configuration.objects.POOL_BASE_FACTOR
+                }
+            }
+        return {"status": "success"}
+
+    def mocked_account_request(*args, **kwargs):
+        """
+        mock function __accounting_request__ for send share to accounting
+        """
+        return {"status": "ok"}
+
+    def mocked_node_request_status_valid(*args, **kwargs):
+        """
+        mock function node_request for urls 'mining/candidate and 'info'
+        """
+        if args[0] == "info":
+            return {
+                "status": "success",
+                "response": {
+                    "headersHeight": 41496,
+                    "difficulty": Configuration.objects.POOL_BASE_FACTOR * pow(10, 8)
+                }
+            }
+
+    @patch("Api.utils.share.ValidateShare.__accounting_request__", side_effect=mocked_account_request)
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_status_solved_lesX(self, mock, accounting_mock):
+        """
+        Solution
+        Check that d < b and left == right for a share solved.
+        """
+
+        share = {
+            "pk": "03cd07843e1f7e25407eda2369ad644854e532e381ab30d6488970e0b87d060d16",
+            "w": "0370b32976a9bc37654e6b34390c8dd30d3dc44c3f52e9421cc4ec31ef6a1bca4c",
+            "nonce": "00000237d4e1e20c",
+            "d": 46242367293113109317096091884217605312791141894953570819396709798327,
+            "msg": "fc0ecfe7a0559c556cb5fe25dd9259e5b548a33502be0c474cd581f77f0acb89",
+            "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"
+        }
+        block = ValidateShare()
+        block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'])
+        accounting_mock.assert_has_calls([call({
+            'miner': '03cd07843e1f7e25407eda2369ad644854e532e381ab30d6488970e0b87d060d16',
+            'share': 'a8794c0719bbe03afe6ff4926d56d59aeb3c2438d7396b7c4c4fd5aa064288df',
+            'status': 'solved',
+            'difficulty': 1,
+            'headers_height': 41496,
+            'transaction_id': '53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5'
+        })])
+
+    @patch("Api.utils.share.ValidateShare.__accounting_request__", side_effect=mocked_account_request)
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request_status_valid)
+    def test_status_valid(self, mock, accounting_mock):
+        """
+        Solution
+        Check that d < b and left == right for a share solved.
+        """
+
+        share = {
+            "pk": "03cd07843e1f7e25407eda2369ad644854e532e381ab30d6488970e0b87d060d16",
+            "w": "0370b32976a9bc37654e6b34390c8dd30d3dc44c3f52e9421cc4ec31ef6a1bca4c",
+            "nonce": "00000237d4e1e20c",
+            "d": 46242367293113109317096091884217605312791141894953570819396709798327,
+            "msg": "fc0ecfe7a0559c556cb5fe25dd9259e5b548a33502be0c474cd581f77f0acb89",
+            "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"
+        }
+        block = ValidateShare()
+        block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'])
+        accounting_mock.assert_has_calls([call({
+            'miner': '03cd07843e1f7e25407eda2369ad644854e532e381ab30d6488970e0b87d060d16',
+            'share': 'a8794c0719bbe03afe6ff4926d56d59aeb3c2438d7396b7c4c4fd5aa064288df',
+            'status': 'valid',
+            'difficulty': pow(10, 8)
+        })])
+
+    @patch("Api.utils.share.ValidateShare.__accounting_request__", side_effect=mocked_account_request)
+    @patch("ErgoApi.settings")
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_status_invalid(self, mock, mock_setting, accounting_mock):
+        """
+         Solution
+         Check that d > POOL_DIFFICULTY or left =! right for a share invalid.
+         """
+        mock_setting.POOL_DIFFICULTY = 125792089237316195423570985008687907852837564279074904382605163141518161494337
+
+        share = {
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8B178db37ec034328a23fed4855a9",
+            "w": "03b783831ab40435c02bf0b3225890540b9689db3c93d4b0bdb32e5a837f281438",
+            "nonce": "0000000000400ee0",
+            "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406,
+            "msg": "f548e38f716e90f52078880c7cdc5a81e27676b26b9b9251b5539e6b1df2ffb5",
+            "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"
+        }
+
+        block = ValidateShare()
+        block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'])
+        # check status for this block is invalid
+        accounting_mock.assert_has_calls([call({
+            'miner': '0354043bd5f16526b0184e6521a0bd462783f8B178db37ec034328a23fed4855a9',
+            'share': '45826fc44e975ce98100580a0164e8599c71344e8863d9dae493b01e88325329',
+            "status": "invalid",
+            'difficulty': 1
+        })])
+
+    def test_type_input_d_str(self):
+        block = ValidationShareSerializer()
+        output = block.validate_d("46242367293113109317096091884217605312791141894953570819396709798327")
+        self.assertEqual(output, 46242367293113109317096091884217605312791141894953570819396709798327)
+
+    def test_type_input_d_invalid(self):
+        block = ValidationShareSerializer()
+        try:
+            block.validate_d("462?2367293113109317096091884217605312791141894953570819396709798327")
+        except ValidationError as e:
+            self.assertEquals('invalid number entered', e.args[0])
+
+    def test_ec_point_start_byte_2(self):
+        block = ValidateShare()
+        output = block.__ec_point__(decode("0254043bd5f16526b0184e6521a0bd462783f8B178db37ec034328a23fed4855a9", "hex"))
+        self.assertEqual(output['value'].x,
+                         38001759640178464358233514318285492856403682368769743827942002958530733692329)
+        self.assertEqual(output['value'].y,
+                         47862723537995571517279590967139629780302343405661481110647004256081707204458)
+
+    def test_ec_point_start_byte_except_2_3(self):
+        block = ValidateShare()
+        try:
+            block.__ec_point__(decode("0454043bd5f16526b0184e6521a0bd462783f8B178db37ec034328a23fed4855a9", "hex"))
+        except ValidationError as e:
+            self.assertEquals('invalid', e.args[0]['status'])
+
+    def test_gen_indexes(self):
+        """
+        input function gen_indexes is concat array-bytes of msg and nonce
+        """
+        msg = "cfc5f330a71a99616453b18e572ee06a7e045e0c2f6cf35ce7d490572ec7a2ac".encode("ascii")
+        nonce = "000000058B1CE60D".encode("ascii")
+        block = ValidateShare()
+        output = block.__gen_indexes__(msg + nonce)
+        self.assertEqual(output, [54118084, 29803733, 46454084, 13976688, 21262480, 7376957, 9452803, 3998647, 17020853,
+                                  62371271, 62244663, 29833011, 53949362, 53719676, 62029037, 41741671, 15558442,
+                                  23538307, 53117732, 42149055, 52740024, 12564581, 62416135, 6620933, 17237427,
+                                  50705181, 28515596, 52235322, 17578593, 3826135, 39966521, 30882246])
+
+    def test_gen_element(self):
+        """
+        input function gen_element is message, pk, w, member of output gen_indexes
+        """
+        msg = "cfc5f330a71a99616453b18e572ee06a7e045e0c2f6cf35ce7d490572ec7a2ac".encode("ascii")
+        p1 = "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C".encode("ascii")
+        p2 = "02600D9BEEE35425E5C467A4295D49EDAEF15E22C8B2EF7E916A9BE30EC7DA3B65".encode("ascii")
+        out_gen_indexes = 54118084
+        block = ValidateShare()
+        output = block.__gen_element__(msg, p1, p2, struct.pack(">I", out_gen_indexes))
+        self.assertEqual(output, 1442183731460476782005370820367939156210879287829514232459313282341328232038)
+
+    @patch("Api.utils.share.ValidateShare.__accounting_request__", side_effect=mocked_account_request)
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_status_invalid_wrong_input(self, mock, accounting_mock):
+        """
+         Test for input wrong, params not hex and in this test, we must get status invalid for a public_key
+          that there is in database.
+         """
+        share = {
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "w": "1",
+            "nonce": "1",
+            "d": 1,
+            "msg": "f548e38f716e90f52078880c7cdc5a81e27676b26b9b9251b5539e6b1df2ffb5",
+            "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"
+        }
+
+        block = ValidateShare()
+        block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'])
+        accounting_mock.assert_has_calls([call({
+            'miner': '0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9',
+            'share': '2e2c55ba14e05fa1291621afd5611f8a828f5b0dfeea6e8c7724327bba47a7ef',
+            "status": "invalid",
+            'difficulty': 1,
+        })])
+
+    @patch("Api.utils.share.ValidateShare.__accounting_request__", side_effect=mocked_account_request)
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_status_invalid_empty_msg_tx_id(self, mock, accounting_mock):
+        """
+         This Test is for status that msg ot tx_id is emptywe want to raise exception validation error
+          and get status 'invalid'
+         """
+
+        share = {
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "w": "1",
+            "nonce": "1",
+            "d": 1,
+        }
+
+        block = ValidateShare()
+        try:
+            block.validate(share['pk'], share['w'], share['nonce'], share['d'])
+        except ValidationError as e:
+            self.assertEquals('invalid', e.args[0]['status'])
+
+
+class TestValidateTransaction(TransactionTestCase):
+    """
+    Test class for Validate Transaction API
+    This class has 2 test function:
+    1) using http 'post' method to validate a transaction that is valid.
+    2) using http 'post' method to validate a transaction that is invalid
+    """
+    reset_sequences = True
+
+    def mocked_node_request(*args, **kwargs):
+        """
+        mock function node_request for urls 'transactions/check', 'wallet/addresses' and 'utils/ergoTreeToAddress/'
+        """
+        if args[0] == "transactions/check":
+            return {
+                "status": "success",
+                "response": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7"
+            }
+        elif args[0] == "wallet/addresses":
+            return {
+                "status": "success",
+                "response": ["3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"]
+            }
+        elif "utils/ergoTreeToAddress/" in args[0]:
+            return {
+                "status": "success",
+                "response": {
+                    "address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"
+                }
+            }
+
+    def mocked_node_request_external_error_transactions_check(*args, **kwargs):
+        """
+        mock function node_request for urls 'transactions/check', 'wallet/addresses' and 'utils/ergoTreeToAddress/'
+        """
+        if args[0] == "transactions/check":
+            return {
+                "status": "External Error",
+                "response": "External Error"
+            }
+
+    def mocked_node_request_external_error_wallet_addresses(*args, **kwargs):
+        """
+        mock function node_request for urls 'transactions/check', 'wallet/addresses' and 'utils/ergoTreeToAddress/'
+        """
+        if args[0] == "transactions/check":
+            return {
+                "status": "success",
+                "response": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7"
+            }
+        elif args[0] == "wallet/addresses":
+            return {
+                "status": "External Error",
+                "response": "External Error"
+            }
+
+    def mocked_node_request_external_error_utils_ergo_tree_to_address(*args, **kwargs):
+        """
+        mock function node_request for urls 'transactions/check', 'wallet/addresses' and 'utils/ergoTreeToAddress/'
+        """
+        if args[0] == "transactions/check":
+            return {
+                "status": "success",
+                "response": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7"
+            }
+        elif args[0] == "wallet/addresses":
+            return {
+                "status": "success",
+                "response": ["3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"]
+            }
+        elif "utils/ergoTreeToAddress/" in args[0]:
+            return {
+                "status": "External Error",
+                "response": "External Error"
+            }
+
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_transaction_valid(self, mock):
+        """
+        In this scenario we want to test the functionality of Validate Transaction when
+        it is called function validate serializer.
+        We expect that the status be "valid" and output message Transaction is valid and tx_id.
+        :return:
+        """
+        data_input = {
+            "pk": "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C",
+            "transaction": {
+                "id": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7",
+                "outputs": [
+                    {
+                        "value": 1000000000,
+                        "ergoTree": "0008cd027ae614dd724777fe9ead18d82f3c53f04de0525b46d235a74b04af694694485e"
+                    },
+                    {
+                        "value": 1000000,
+                        "ergoTree": "1005040004000e36100204a00b08cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ea02d192a39a8cc7a701730073011001020402d19683030193a38cc7b2a57300000193c2b2a57301007473027303830108cdeeac93b1a57304"
+                    },
+                    {
+                        "value": 216177000000,
+                        "ergoTree": "0008cd027ae614dd724777fe9ead18d82f3c53f04de0525b46d235a74b04af694694485e"
+                    }]
+            }
+        }
+        # Create object from class ValidateTransactionSerializer and call function validate for validation Transaction
+        transaction = ValidateTransactionSerializer()
+        response = transaction.validate(data_input)
+
+        # We expect that the status be "valid" and output message "Transaction is valid" and tx_id.
+        self.assertEqual(response.get("message"), "Transaction is valid")
+        self.assertEqual(response.get("status"), "valid")
+        self.assertEqual(response.get("tx_id"), "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7")
+
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_invalid_tx_id(self, mock):
+        """
+        In this scenario we want to test the functionality of Validate Transaction when
+        it is called function validate serializer.
+        We expect that the status be "invalid" and output message "tx_id is invalid" and tx_id.
+        :return:
+        """
+        data_input = {
+            "pk": "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C",
+            "transaction": {
+                "id": "a2713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7",
+                "outputs": [
+                    {
+                        "value": 1000000000,
+                        "ergoTree": "0008cd027ae614dd724777fe9ead18d82f3c53f04de0525b46d235a74b04af694694485e"
+                    },
+                    {
+                        "value": 1000000,
+                        "ergoTree": "1005040004000e36100204a00b08cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ea02d192a39a8cc7a701730073011001020402d19683030193a38cc7b2a57300000193c2b2a57301007473027303830108cdeeac93b1a57304"
+                    },
+                    {
+                        "value": 216177000000,
+                        "ergoTree": "0008cd027ae614dd724777fe9ead18d82f3c53f04de0525b46d235a74b04af694694485e"
+                    }]
+            }
+        }
+        # Create object from class ValidateTransactionSerializer and call function validate for validation Transaction
+        transaction = ValidateTransactionSerializer()
+        try:
+            transaction.validate(data_input)
+        except ValidationError as e:
+            # We expect that the status be "invalid" and output message "tx_id is invalid".
+            self.assertEqual('invalid', e.args[0]['status'])
+            self.assertEqual('tx_id is invalid', e.args[0]['message'])
+
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_invalid_value_wallet_address(self, mock):
+        """
+        In this scenario we want to test the functionality of Validate Transaction when
+        it is called function validate serializer.
+        We expect that the status 'invalid' and output Transaction is invalid because sum of value
+         isn"t biggest than policy pool reward or wallet address is invalid.
+        :return:
+        """
+        data_input = {
+            "pk": "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C",
+            "transaction": {
+                "id": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7",
+                "outputs": [
+                    {
+                        "value": 10000000,
+                        "ergoTree": "0008cd027ae614dd724777fe9ead18d82f3c53f04de0525b46d235a74b04af694694485e"
+                    },
+                    {
+                        "value": 1000000,
+                        "ergoTree": "1005040004000e36100204a00b08cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ea02d192a39a8cc7a701730073011001020402d19683030193a38cc7b2a57300000193c2b2a57301007473027303830108cdeeac93b1a57304"
+                    },
+                    {
+                        "value": 21617700,
+                        "ergoTree": "0018cd027ae614dd724777fe9ead18d82f3c53f04de0525b46d235a74b04af694694485e"
+                    }]
+            }
+        }
+        # Create object from class ValidateTransactionSerializer and call function validate for validation Transaction
+        transaction = ValidateTransactionSerializer()
+        try:
+            transaction.validate(data_input)
+        except ValidationError as e:
+            # We expect that the status be "invalid" , output Transaction is invalid because sum of value isn"t
+            # biggest than policy pool reward or wallet address is invalid..
+            self.assertEqual('invalid', e.args[0]['status'])
+            self.assertEqual('Wallet address pool or value of transaction is invalid', e.args[0]['message'])
+
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request_external_error_transactions_check)
+    def test_node_response_error_transactions_check(self, mock):
+        """
+        In this scenario we want to test the functionality of Validate Transaction when
+        it is called function validate serializer.
+        We expect that the status 'failed' because node send a response with status code except 200
+         after call API transactions/check
+        :return:
+        """
+        data_input = {
+            "pk": "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C",
+            "transaction": {}
+        }
+        # Create object from class ValidateTransactionSerializer and call function validate for validation Transaction
+        transaction = ValidateTransactionSerializer()
+        try:
+            transaction.validate(data_input)
+        except ValidationError as e:
+            # check status of transaction validate
+            self.assertEqual('failed', e.args[0]['status'])
+            # check message of transaction validate
+            self.assertEqual('External Error', e.args[0]['message'])
+
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request_external_error_wallet_addresses)
+    def test_node_response_error_wallet_addresses(self, mock):
+        """
+        In this scenario we want to test the functionality of Validate Transaction when
+        it is called function validate serializer.
+        We expect that the status 'failed' because node send a response with status code except 200
+         after call API wallet/addresses
+        :return:
+        """
+        data_input = {
+            "pk": "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C",
+            "transaction": {
+                "id": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7",
+            }
+        }
+        # Create object from class ValidateTransactionSerializer and call function validate for validation Transaction
+        transaction = ValidateTransactionSerializer()
+        try:
+            transaction.validate(data_input)
+        except ValidationError as e:
+            # check status of transaction validate
+            self.assertEqual('failed', e.args[0]['status'])
+            # check message of transaction validate
+            self.assertEqual('External Error', e.args[0]['message'])
+
+    @patch("Api.utils.general.General.node_request",
+           side_effect=mocked_node_request_external_error_utils_ergo_tree_to_address)
+    def test_node_response_error_utils_ergo_tree_to_address(self, mock):
+        """
+        In this scenario we want to test the functionality of Validate Transaction when
+        it is called function validate serializer.
+        We expect that the status 'failed' because node send a response with status code except 200
+         after call API utils/ergoTreeToAddress
+        :return:
+        """
+        data_input = {
+            "pk": "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C",
+            "transaction": {
+                "id": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7",
+                "outputs": [
+                    {
+                        "value": 1000000000,
+                        "ergoTree": "0008cd027ae614dd724777fe9ead18d82f3c53f04de0525b46d235a74b04af694694485e"
+                    },
+                    {
+                        "value": 1000000,
+                        "ergoTree": "1005040004000e36100204a00b08cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ea02d192a39a8cc7a701730073011001020402d19683030193a38cc7b2a57300000193c2b2a57301007473027303830108cdeeac93b1a57304"
+                    },
+                    {
+                        "value": 216177000000,
+                        "ergoTree": "0008cd027ae614dd724777fe9ead18d82f3c53f04de0525b46d235a74b04af694694485e"
+                    }]
+            }
+        }
+        # Create object from class ValidateTransactionSerializer and call function validate for validation Transaction
+        transaction = ValidateTransactionSerializer()
+        try:
+            transaction.validate(data_input)
+        except ValidationError as e:
+            # check status of transaction validate
+            self.assertEqual('failed', e.args[0]['status'])
+            # check message of transaction validate
+            self.assertEqual('External Error', e.args[0]['message'])
+
+
+class TestProofValidate(TransactionTestCase):
+    reset_sequences = True
+
+    def test_valid(self):
+        """
+        In this scenario we want to test a valid proof.
+        send a valid data to function validate from proof serializer and want to get status valid and message
+         The proof is valid.
+        :return:
+        """
+        proof_data = {
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "msg_pre_image": "0146062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a4872011e52944ffdcd5e7f745ba14df4487ce8cf30f9b02a2be0c5a1096f8b612c190194448af0d8c9ae2170a7d970f621d18707dc4c2d5e9ec168adb1895e5cbbc555853afe04d0a87819523798e4db5f1b75fd43512cf76c5a3ce5eb8527725e12d1c3f9e0eb2db112e2d742dc71c6aa2df4b35fec85d8c28f6dc954796f3f95c308721e60cc9505016238dfbd02000000",
+            "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
+            "levels": ["01c9a7e42a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"]
+        }
+        # Create object from class ValidateProofSerializer and call function validate for validation Proof
+        proof = ValidateProofSerializer()
+        response = proof.validate(proof_data)
+        # check the content of the response
+        self.assertEqual(response['msg'], 'dc56c734a2956a640bc4efe00c3b5fa5b9cd7337cd086f2ab735e71402a44668')
+        self.assertEqual(response['message'], 'The proof is valid.')
+        self.assertEqual(response['status'], 'valid')
+
+    def test_invalid(self):
+        """
+        In this scenario we want to test a invalid proof leaf_hash != txs_root.
+        send a invalid data to function validate from proof serializer and want to get status invalid and message
+         The proof is invalid.
+        :return:
+        """
+        proof_data = {
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "msg_pre_image": "0146062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a4872011e52944ffdcd5e7f745ba14df4487ce8cf30f9b02a2be0c5a1096f8b612c190194448af0d8c9ae2170a7d970f621d18707dc4c2d5e9ec168adb1895e5cbbc555853afe04d0a87819523798e4db5f1b75fd43512cf76c5a3ce5eb8527725e12d1c3f9e0eb2db112e2d742dc71c6aa2df4b35fec85d8c28f6dc954796f3f95c308721e60cc9505016238dfbd02000000",
+            "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
+            "levels": ["00c9a7e42a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"]
+        }
+        # Create object from class ValidateProofSerializer and call function validate for validation Proof
+        proof = ValidateProofSerializer()
+        response = proof.validate(proof_data)
+        # check the content of the response
+        self.assertEqual(response['message'], 'The proof is invalid.')
+        self.assertEqual(response['status'], 'invalid')
+
+    def test_input_invalid_levels(self):
+        """
+        In this scenario we want to test a invalid type input for proof.
+        send a invalid data to function validate from proof serializer and want to get status failed because data input
+         have wrong type input (levels).
+        :return:
+        """
+        proof_data = {
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "msg_pre_image": "0146062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a4872011e52944ffdcd5e7f745ba14df4487ce8cf30f9b02a2be0c5a1096f8b612c190194448af0d8c9ae2170a7d970f621d18707dc4c2d5e9ec168adb1895e5cbbc555853afe04d0a87819523798e4db5f1b75fd43512cf76c5a3ce5eb8527725e12d1c3f9e0eb2db112e2d742dc71c6aa2df4b35fec85d8c28f6dc954796f3f95c308721e60cc9505016238dfbd02000000",
+            "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
+            "levels": ["01c9a7e?2a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"]
+        }
+        # Create object from class ValidateProofSerializer and call function validate for validation Proof
+        proof = ValidateProofSerializer()
+        try:
+            proof.validate(proof_data)
+        except ValidationError as e:
+            # check the content of the response
+            self.assertEqual(e.args[0]['message'], 'Type of input is invalid')
+            self.assertEqual(e.args[0]['status'], 'failed')
+
+    def test_input_invalid_msg_pre_image(self):
+        """
+        In this scenario we want to test a invalid type input for proof.
+        send a invalid data to function validate from proof serializer and want to get status failed because data input
+         have wrong type input (msg_pre_image).
+        :return:
+        """
+        proof_data = {
+            "pk": "0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9",
+            "msg_pre_image": "01?6062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a4872011e52944ffdcd5e7f745ba14df4487ce8cf30f9b02a2be0c5a1096f8b612c190194448af0d8c9ae2170a7d970f621d18707dc4c2d5e9ec168adb1895e5cbbc555853afe04d0a87819523798e4db5f1b75fd43512cf76c5a3ce5eb8527725e12d1c3f9e0eb2db112e2d742dc71c6aa2df4b35fec85d8c28f6dc954796f3f95c308721e60cc9505016238dfbd02000000",
+            "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
+            "levels": ["01c9a7e42a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"]
+        }
+        # Create object from class ValidateProofSerializer and call function validate for validation Proof
+        proof = ValidateProofSerializer()
+        try:
+            proof.validate(proof_data)
+        except ValidationError as e:
+            # check the content of the response
+            self.assertEqual(e.args[0]['message'], 'Type of input is invalid')
+            self.assertEqual(e.args[0]['status'], 'failed')
