@@ -1551,8 +1551,9 @@ class TestValidation(TransactionTestCase):
                 }
             }
 
+    @patch("Api.tasks.ValidateShareTask.delay")
     @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
-    def test_post_valid(self, mock):
+    def test_post_valid(self, mock, mock_task):
         """
         In this scenario we want to test the functionality of Validation API when
         it is called by a http "post" method.
@@ -1671,7 +1672,7 @@ class TestValidation(TransactionTestCase):
         self.assertEqual(response.json(), result)
 
     @patch("Api.models.Configuration.objects")
-    def test_post_invalid_number_chunk(self, mock_setting):
+    def test_post_invalid_number_chunk(self, mock_chunk_size):
         """
         In this scenario we want to test the functionality of Validation API when the share parameters bigger than
          SHARE_CHUNK_SIZE
@@ -1679,7 +1680,7 @@ class TestValidation(TransactionTestCase):
         We expect that the status code of response be "413" and message 'too big chunk'
         :return:
         """
-        mock_setting.SHARE_CHUNK_SIZE = 1
+        mock_chunk_size.SHARE_CHUNK_SIZE = 1
 
         data_input = {
             "pk": "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C",
