@@ -16,6 +16,7 @@ from Api.serializers import ShareSerializer, ValidationShareSerializer, Validate
     ValidateProofSerializer
 from ErgoApi.settings import ACCOUNTING_URL
 from Api.utils.share import ValidateShare
+from Api.utils.header import HeaderWithoutPow, HeaderSerializer, Reader, Writer
 
 
 class TransactionValidateApiTest(TransactionTestCase):
@@ -1719,3 +1720,63 @@ class TestValidation(TransactionTestCase):
         # check the content of the response
         self.assertEqual(response.json(), result)
 
+
+class TestHeaderSerializer(TestCase):
+    """
+    Test class for test serializer and parser header
+    """
+
+    def test_serialize_header(self):
+        """
+        In this test want serialize header (msg_pre_image).
+        :return:
+        """
+        w = Writer()
+        # create header
+        h = HeaderWithoutPow(version=1,
+                             parent_id="3c1560b4904f0ebbb31a73c99e1cc8df80ff888777074160dcd758b59e77cf13",
+                             ad_proofs_root="983b5ebefc4928a587ef9c1510974fb4d266d2b03d0805129880fc321bfc327a",
+                             transactions_root="1b48e7eef3d01f917143bd9844fae4e7e80c54745c24679b098ec6145060b682",
+                             state_root="5ec18382a0b034d27b6c452ffd4329491108771a4fb240a06a82f40692e6e46113",
+                             timestamp=1578501266616,
+                             extension_root="e583611a2f4bd48e06453d9e01057c4d7849b6d1bebdfee6e5687d274bd77e1c",
+                             n_bits=50394721,
+                             height=80000,
+                             votes="000000")
+        # serialize header
+        HeaderSerializer.serialize_without_pow(header=h, writer=w)
+        msg_pre_image = "013c1560b4904f0ebbb31a73c99e1cc8df80ff888777074160dcd758b59e77cf13983b5ebefc4928a587ef9c1510974fb4d266d2b03d0805129880fc321bfc327a1b48e7eef3d01f917143bd9844fae4e7e80c54745c24679b098ec6145060b6825ec18382a0b034d27b6c452ffd4329491108771a4fb240a06a82f40692e6e46113b8b987b0f82de583611a2f4bd48e06453d9e01057c4d7849b6d1bebdfee6e5687d274bd77e1c0300f66180f104000000"
+        self.assertEqual(decode(msg_pre_image, 'hex'), w.get_bytes())
+
+    def test_parse_header(self):
+        """
+        In this test want with parse header (msg_pre_image) get information of header.
+        """
+        # header
+        msg_pre_image = "013c1560b4904f0ebbb31a73c99e1cc8df80ff888777074160dcd758b59e77cf13983b5ebefc4928a587ef9c1510974fb4d266d2b03d0805129880fc321bfc327a1b48e7eef3d01f917143bd9844fae4e7e80c54745c24679b098ec6145060b6825ec18382a0b034d27b6c452ffd4329491108771a4fb240a06a82f40692e6e46113b8b987b0f82de583611a2f4bd48e06453d9e01057c4d7849b6d1bebdfee6e5687d274bd77e1c0300f66180f104000000"
+        # Information of header that we expect
+        version = 1
+        parent_id = "3c1560b4904f0ebbb31a73c99e1cc8df80ff888777074160dcd758b59e77cf13"
+        ad_proofs_root = "983b5ebefc4928a587ef9c1510974fb4d266d2b03d0805129880fc321bfc327a"
+        transactions_root = "1b48e7eef3d01f917143bd9844fae4e7e80c54745c24679b098ec6145060b682"
+        state_root = "5ec18382a0b034d27b6c452ffd4329491108771a4fb240a06a82f40692e6e46113"
+        timestamp = 1578501266616
+        extension_root = "e583611a2f4bd48e06453d9e01057c4d7849b6d1bebdfee6e5687d274bd77e1c"
+        n_bits = 50394721
+        height = 80000
+        votes = "000000"
+        # Create Reader
+        r = Reader(decode(msg_pre_image, 'hex'))
+        # Get information of header
+        header = HeaderSerializer.parse_without_pow(r)
+
+        self.assertEqual(version.to_bytes(1, 'little'), header.version)
+        self.assertEqual(decode(parent_id, 'hex'), header.parentId)
+        self.assertEqual(decode(ad_proofs_root, 'hex'), header.ADProofsRoot)
+        self.assertEqual(decode(transactions_root, 'hex'), header.transactionsRoot)
+        self.assertEqual(decode(state_root, 'hex'), header.stateRoot)
+        self.assertEqual(timestamp, header.timestamp)
+        self.assertEqual(decode(extension_root, 'hex'), header.extensionRoot)
+        self.assertEqual(n_bits, header.nBits)
+        self.assertEqual(height, header.height)
+        self.assertEqual(decode(votes, 'hex'), header.votes)
