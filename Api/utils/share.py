@@ -154,7 +154,7 @@ class ValidateShare(General, celery.Task):
         """
         Function for send share to Accounting service
         :param share: A json consist of miner, status, share, difficulty, tx_id, headers_height
-        :return:
+        :return: status request to accounting
         """
         try:
             url = urljoin(ACCOUNTING, "shares/")
@@ -169,9 +169,10 @@ class ValidateShare(General, celery.Task):
             logger.debug(response)
             return {'status': 'ok'}
         except requests.exceptions.RequestException as e:
-            logger.critical("Can not send request to Accounting service")
-            logger.critical(e)
-            response = {'status': 'error'}
+            response = {
+                'status': 'error',
+                'message': e
+            }
             return response
 
     def validate(self, pk, w, n, d, msg='', tx_id=''):
@@ -236,19 +237,30 @@ class ValidateShare(General, celery.Task):
             if share['status'] == 'solved':
                 share.update({'headers_height': height})
                 share.update({'transaction_id': tx_id})
+            # Set flag_logger for number of critical alarm limit in while true
+            flag_logger = 1
             while True:
                 response = self.__accounting_request__(share)
                 if response['status'] == 'ok':
                     break
                 else:
+                    if flag_logger >= 0:
+                        logger.critical("Can not send request to Accounting service")
+                        logger.critical(response['message'])
+                        flag_logger -= 1
                     time.sleep(1)
             return
         except ValidationError as e:
+            flag_logger = 1
             share['status'] = e.args[0]['status']
             while True:
                 response = self.__accounting_request__(share)
                 if response['status'] == 'ok':
                     break
                 else:
+                    if flag_logger >= 0:
+                        logger.critical("Can not send request to Accounting service")
+                        logger.critical(response['message'])
+                        flag_logger -= 1
                     time.sleep(1)
             return

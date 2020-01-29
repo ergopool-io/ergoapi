@@ -556,18 +556,11 @@ class ValidateTransactionSerializer(serializers.Serializer, General):
         attrs.update(response)
         return attrs
 
-    def update(self, instance, validated_data):
-        pass
-
-    def create(self, validated_data):
-        pass
-
     class Meta:
         fields = ['transaction', 'status', 'tx_id', 'message']
 
 
 class ValidateProofSerializer(serializers.Serializer):
-    pk = serializers.CharField()
     msg_pre_image = serializers.CharField()
     leaf = serializers.CharField()
     levels = serializers.ListField(child=serializers.CharField())
@@ -575,7 +568,7 @@ class ValidateProofSerializer(serializers.Serializer):
     message = serializers.CharField(required=False, read_only=True)
     status = serializers.CharField(required=False, read_only=True)
 
-    def __merkle_proof__(self, leaf, levels_encoded, pk):
+    def __merkle_proof__(self, leaf, levels_encoded):
         # tx_id is a "leaf" in a Merkle proof
         tx_id = leaf
         # Merkle proof element is encoded in the following way:
@@ -587,7 +580,6 @@ class ValidateProofSerializer(serializers.Serializer):
             logger.error("Levels input parameter in proof is not valid.")
             logger.error(e)
             raise ValidationError({
-                'pk': pk,
                 'message': 'Type of input is invalid',
                 'status': 'failed'
             })
@@ -598,6 +590,14 @@ class ValidateProofSerializer(serializers.Serializer):
             elif level[1] == decode('00', "hex"):
                 leaf_hash = General.blake(decode('01', "hex") + leaf_hash + level[0])
         return leaf_hash
+
+    def validate_msg_pre_image(self, value):
+        try:
+            return decode(value, "hex")
+        except ValueError as e:
+            logger.error("Proof input parameters are not valid.")
+            logger.error(e)
+            raise ValidationError('Type of input is invalid')
 
     def validate(self, attrs):
         """
@@ -616,30 +616,20 @@ class ValidateProofSerializer(serializers.Serializer):
          ............ ^^
         :return: status of merkle_proof
         """
-        msg_pre_image_base16 = attrs['msg_pre_image']
+
         leaf = attrs['leaf']
-        pk = attrs['pk'].lower()
         levels_encoded = attrs['levels']
-        try:
-            msg_pre_image = decode(msg_pre_image_base16, "hex")
-        except ValueError as e:
-            logger.error("Proof input parameters are not valid.")
-            logger.error(e)
-            raise ValidationError({
-                'pk': pk,
-                'message': 'Type of input is invalid',
-                'status': 'failed'
-            })
+        msg_pre_image = attrs['msg_pre_image']
 
         # hash of "msg_pre_image" (which is a header without PoW) should be equal to "msg"
         msg = General.blake(msg_pre_image, 'hex')
         # Transactions Merkle tree digest is in bytes 65-96 (inclusive) of the unproven header
         txs_root = msg_pre_image[65:97]
         # Create Merkle Proof
-        leaf_hash = self.__merkle_proof__(leaf, levels_encoded, pk)
+        leaf_hash = self.__merkle_proof__(leaf, levels_encoded)
         # Validate_merkle
         if leaf_hash == txs_root:
-            logger.info('Proof is valid, updated the block for pk {}'.format(pk))
+            logger.info('Proof is valid for transaction id {}'.format(leaf))
             attrs.update({
                 'msg': msg,
                 'message': 'The proof is valid.',
@@ -653,18 +643,11 @@ class ValidateProofSerializer(serializers.Serializer):
             })
             return attrs
 
-    def update(self, instance, validated_data):
-        pass
-
-    def create(self, validated_data):
-        pass
-
     class Meta:
         fields = ['pk', 'msg_pre_image', 'leaf', 'levels', 'message', 'status']
 
 
 class ValidationShareSerializer(serializers.Serializer, General):
-    pk = serializers.CharField()
     w = serializers.CharField()
     nonce = serializers.CharField()
     d = serializers.CharField()
@@ -675,23 +658,38 @@ class ValidationShareSerializer(serializers.Serializer, General):
         except:
             raise ValidationError("invalid number entered")
 
-    def update(self, instance, validated_data):
-        pass
+    class Meta:
+        fields = ['pk', 'w', 'nonce', 'd']
+
+
+class AddressesSerializer(serializers.Serializer):
+    miner = serializers.CharField()
+    lock = serializers.CharField()
+    withdraw = serializers.CharField()
+
+    class Meta:
+        fields = ['miner', 'lock', 'withdraw']
+
+
+class ValidationSerializer(serializers.Serializer):
+    pk = serializers.CharField()
+    addresses = AddressesSerializer(many=False)
+    transaction = ValidateTransactionSerializer(many=False)
+    proof = ValidateProofSerializer(many=False)
+    shares = ValidationShareSerializer(many=True)
+
+    def validate_pk(self, value):
+        try:
+            decode(value, 'hex')
+        except:
+            raise ValidationError("invalid pk entered")
 
     def create(self, validated_data):
         pass
 
     class Meta:
-        fields = ['pk', 'w', 'nonce', 'd']
+        fields = ['pk', 'addresses', 'transaction', 'proof', 'shares']
 
-
-class ValidationSerializer(serializers.Serializer):
-    transaction = ValidateTransactionSerializer(many=False)
-    proof = ValidateProofSerializer(many=False)
-    share = ValidationShareSerializer(many=True)
-
-    class Meta:
-        fields = ['transaction', 'proof', 'share']
 
 
 def builder_serializer(options):

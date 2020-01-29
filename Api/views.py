@@ -228,7 +228,7 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
 
     def create(self, request, *args, **kwargs):
         data = request.data
-        if len(data['share']) > Configuration.objects.SHARE_CHUNK_SIZE:
+        if len(data['shares']) > Configuration.objects.SHARE_CHUNK_SIZE:
             return Response({
                 "status": "error",
                 "message": "too big chunk"
@@ -236,16 +236,11 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        if data['proof']['status'] == 'valid' and data['transaction']['status'] == 'valid':
-            logger.debug("Tasks run for validate shares")
-            for share in data['share']:
-                ValidateShareTask.delay(share.get('pk'), share.get('w'), share.get('nonce'), share.get('d'),
-                                        data['proof']['msg'], data['transaction']['tx_id'])
-                return Response({'status': 'OK'}, status=status.HTTP_200_OK)
-        elif not data['transaction']['status'] == 'valid':
-            return Response(data['transaction']['message'], status=status.HTTP_400_BAD_REQUEST)
-        elif not data['proof']['status'] == 'valid':
-            return Response(data['proof']['message'], status=status.HTTP_400_BAD_REQUEST)
+        logger.debug("Tasks run for validate shares")
+        for share in data['shares']:
+            ValidateShareTask.delay(data['pk'], share.get('w'), share.get('nonce'), share.get('d'),
+                                    data['proof']['msg'], data['transaction']['tx_id'])
+        return Response({'status': 'OK'}, status=status.HTTP_200_OK)
 
 
 def builder_viewset(method, options):
