@@ -412,7 +412,10 @@ class TransactionSerializer(serializers.Serializer, General):
                             elif data_node.get('response')['address'] in wallet_address:
                                     value = value + output['value']
                     # Sum value of output field should be bigger than reward policy pool.
-                    if value >= Configuration.objects.REWARD * Configuration.objects.REWARD_FACTOR * pow(10, 9):
+                    PRECISION = Configuration.objects.REWARD_FACTOR_PRECISION
+                    REWARD = round((Configuration.objects.TOTAL_REWARD / 1e9) * Configuration.objects.REWARD_FACTOR, PRECISION)
+                    REWARD = int(REWARD * 1e9)
+                    if value >= REWARD:
                         logger.info('Transaction is valid.')
                         response['message'] = "Transaction is valid"
                     else:
