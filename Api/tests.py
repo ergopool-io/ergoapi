@@ -983,17 +983,26 @@ class TestValidateShare(TransactionTestCase):
             "nonce": "00000237d4e1e20c",
             "d": 46242367293113109317096091884217605312791141894953570819396709798327,
             "msg": "fc0ecfe7a0559c556cb5fe25dd9259e5b548a33502be0c474cd581f77f0acb89",
-            "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"
+            "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
+            "block": {
+                "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
+                "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
+            }
         }
         block = ValidateShare()
-        block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'])
+        block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'],
+                       share['block'])
         accounting_mock.assert_has_calls([call({
             'miner': '03cd07843e1f7e25407eda2369ad644854e532e381ab30d6488970e0b87d060d16',
             'share': 'a8794c0719bbe03afe6ff4926d56d59aeb3c2438d7396b7c4c4fd5aa064288df',
             'status': 'solved',
             'difficulty': 1,
             'headers_height': 41496,
-            'transaction_id': '53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5'
+            'transaction_id': '53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5',
+            'block': {
+                'parent': '46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48',
+                'next': ['c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03']
+            }
         })])
 
     @patch("Api.utils.share.ValidateShare.save_share", side_effect=mocked_account_request)
@@ -1010,15 +1019,24 @@ class TestValidateShare(TransactionTestCase):
             "nonce": "00000237d4e1e20c",
             "d": 46242367293113109317096091884217605312791141894953570819396709798327,
             "msg": "fc0ecfe7a0559c556cb5fe25dd9259e5b548a33502be0c474cd581f77f0acb89",
-            "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"
+            "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
+            "block": {
+                "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
+                "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
+            }
         }
         block = ValidateShare()
-        block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'])
+        block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'],
+                       share['block'])
         accounting_mock.assert_has_calls([call({
             'miner': '03cd07843e1f7e25407eda2369ad644854e532e381ab30d6488970e0b87d060d16',
             'share': 'a8794c0719bbe03afe6ff4926d56d59aeb3c2438d7396b7c4c4fd5aa064288df',
             'status': 'valid',
-            'difficulty': pow(10, 8)
+            'difficulty': pow(10, 8),
+            "block": {
+                "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
+                "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
+            }
         })])
 
     @patch("Api.utils.share.ValidateShare.save_share", side_effect=mocked_account_request)
@@ -1037,11 +1055,16 @@ class TestValidateShare(TransactionTestCase):
             "nonce": "0000000000400ee0",
             "d": 99693760199151170059172331486081907352237598845267005513376026899853403721406,
             "msg": "f548e38f716e90f52078880c7cdc5a81e27676b26b9b9251b5539e6b1df2ffb5",
-            "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"
+            "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
+            "block": {
+                "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
+                "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
+            }
         }
 
         block = ValidateShare()
-        block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'])
+        block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'],
+                       share['block'])
         # check status for this block is invalid
         accounting_mock.assert_has_calls([call({
             'miner': '0354043bd5f16526b0184e6521a0bd462783f8B178db37ec034328a23fed4855a9',
@@ -1113,11 +1136,15 @@ class TestValidateShare(TransactionTestCase):
             "nonce": "1",
             "d": 1,
             "msg": "f548e38f716e90f52078880c7cdc5a81e27676b26b9b9251b5539e6b1df2ffb5",
-            "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"
+            "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
+            'block': {
+                "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
+                "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
+            }
         }
 
         block = ValidateShare()
-        block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'])
+        block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'], share['block'])
         accounting_mock.assert_has_calls([call({
             'miner': '0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9',
             'share': '2e2c55ba14e05fa1291621afd5611f8a828f5b0dfeea6e8c7724327bba47a7ef',
@@ -1298,7 +1325,7 @@ class TestProofValidate(TransactionTestCase):
 
     def mocked_node_request(*args, **kwargs):
         """
-        mock function node_request for urls and 'info'
+        mock function node_request for urls 'info', '/blocks/lastHeaders/', '/blocks/at/'and '/blocks/chainSlice'
         """
         if args[0] == "info":
             return {
@@ -1316,6 +1343,11 @@ class TestProofValidate(TransactionTestCase):
                     "difficulty": 489467634401280,
                     "timestamp": 1574114138065
                 }]
+            }
+        elif args[0] == "/blocks/at/40671":
+            return {
+                "status": "success",
+                "response": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
             }
         elif "/blocks/chainSlice?fromHeight" in args[0]:
             return {
@@ -1393,6 +1425,10 @@ class TestProofValidate(TransactionTestCase):
         response = proof.validate(proof_data)
         # check the content of the response
         self.assertEqual(response['msg'], 'dc56c734a2956a640bc4efe00c3b5fa5b9cd7337cd086f2ab735e71402a44668')
+        self.assertEqual(response['block'], {
+            "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
+            "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
+        })
         self.assertEqual(response['message'], 'The proof is valid.')
         self.assertEqual(response['status'], 'valid')
 
@@ -1442,7 +1478,8 @@ class TestValidation(TransactionTestCase):
 
     def mocked_node_request(*args, **kwargs):
         """
-        mock function node_request for urls 'info', 'transactions/check', 'wallet/addresses' and 'utils/ergoTreeToAddress/'
+        mock function node_request for urls 'info', 'transactions/check', 'wallet/addresses', '/blocks/lastHeaders/',
+         '/blocks/chainSlice', '/blocks/at/' and 'utils/ergoTreeToAddress/'
         """
         if args[0] == "transactions/check":
             return {
@@ -1478,6 +1515,11 @@ class TestValidation(TransactionTestCase):
                     "timestamp": 1574114138065
                 }]
             }
+        elif args[0] == "/blocks/at/97666":
+            return {
+                "status": "success",
+                "response": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
+            }
         elif "/blocks/chainSlice?fromHeight" in args[0]:
             return {
                 "status": "success",
@@ -1498,8 +1540,8 @@ class TestValidation(TransactionTestCase):
 
     def mocked_node_request_invalid(*args, **kwargs):
         """
-        mock function node_request for urls 'info', 'transactions/check', 'wallet/addresses',
-         'utils/ergoTreeToAddress/', 'info', '/blocks/lastHeaders/1' and '/blocks/chainSlice'
+        mock function node_request for urls 'info', 'transactions/check', 'wallet/addresses', '/blocks/lastHeaders/',
+         '/blocks/chainSlice', '/blocks/at/' and 'utils/ergoTreeToAddress/'
         """
         if args[0] == "transactions/check":
             return {
@@ -1534,6 +1576,11 @@ class TestValidation(TransactionTestCase):
                     "difficulty": 489467634401280,
                     "timestamp": 1574114138065
                 }]
+            }
+        elif args[0] == "/blocks/at/97666":
+            return {
+                "status": "success",
+                "response": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
             }
         elif "/blocks/chainSlice?fromHeight" in args[0]:
             return {

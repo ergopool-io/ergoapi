@@ -505,6 +505,7 @@ class ConfigurationValueSerializer(serializers.Serializer):
 
 class ValidateTransactionSerializer(serializers.Serializer, General):
     transaction = serializers.JSONField()
+    block = serializers.JSONField(required=False, read_only=True)
     status = serializers.CharField(required=False, read_only=True)
     message = serializers.CharField(required=False, read_only=True)
     tx_id = serializers.CharField(required=False, read_only=True)
@@ -724,8 +725,14 @@ class ValidateProofSerializer(serializers.Serializer):
             logger.info('Proof is invalid for transaction id {}'.format(leaf))
             raise ValidationError({'message': 'The proof is invalid.', 'status': 'invalid'})
 
+        # Set parent and next block of candidate block
+        block_next = General.node_request('/blocks/at/{}'.format(str(header.height)), {'accept': 'application/json'})
+        block = {
+            'parent': header.parentId.hex(),
+            'next': block_next.get('response')}
+
         logger.info('Proof is valid for transaction id {}'.format(leaf))
-        attrs.update({'msg': msg, 'message': 'The proof is valid.', 'status': 'valid'})
+        attrs.update({'msg': msg, 'block': block, 'message': 'The proof is valid.', 'status': 'valid'})
         return attrs
 
     class Meta:
