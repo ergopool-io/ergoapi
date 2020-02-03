@@ -18,6 +18,9 @@ DATABASES = {
 # Address Node (ex: "http://127.0.0.1:9053/")
 NODE_ADDRESS = "Address Node"
 
+# Explorer ergo (ex :"https://api.ergoplatform.com/")
+ERGO_EXPLORER_ADDRESS = "Address Ergo_Explorer"
+
 # Secret Key of Node(apiKey) (ex: "623f4e8e440007f45020afabbf56d8ba43144778757ea88497c794ad529a0433")
 API_KEY = "Secret Key of Node"
 
@@ -69,3 +72,8 @@ LOGGING = {
     }
 }
 
+# Number of call logger in level critical
+NUMBER_OF_LOG = 100
+
+# set your approprate broker url, e.g, rabbitmq or redis
+CELERY_BROKER_URL = 'amqp://guest:guest@localhost:5672//'

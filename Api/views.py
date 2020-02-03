@@ -17,6 +17,7 @@ from Api import serializers
 from Api.models import Block, Configuration, CONFIGURATION_DEFAULT_KEY_VALUE, CONFIGURATION_KEY_CHOICE, CONFIGURATION_KEY_TO_TYPE
 from Api.serializers import ConfigurationSerializer
 from Api.utils.general import General
+from Api.tasks import ValidateShareTask
 
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL")
 ACCOUNTING_HOST = getattr(settings, "ACCOUNTING_HOST")
@@ -222,6 +223,26 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet,
             'pool_base_factor': result['POOL_BASE_FACTOR'],
             'max_chunk_size': result['SHARE_CHUNK_SIZE'],
         }
+
+
+class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
+    serializer_class = serializers.ValidationSerializer
+
+    def create(self, request, *args, **kwargs):
+        data = request.data
+        if len(data['shares']) > Configuration.objects.SHARE_CHUNK_SIZE:
+            return Response({
+                "status": "error",
+                "message": "too big chunk"
+            }, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        logger.debug("Tasks run for validate shares")
+        for share in data['shares']:
+            ValidateShareTask.delay(data['pk'], share.get('w'), share.get('nonce'), share.get('d'),
+                                    data['proof']['msg'], data['transaction']['tx_id'])
+        return Response({'status': 'OK'}, status=status.HTTP_200_OK)
 
 
 def builder_viewset(method, options):
