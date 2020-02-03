@@ -41,8 +41,8 @@ class ValidateShare(General, celery.Task):
     def __init__(self):
         self.base_factor = Configuration.objects.POOL_BASE_FACTOR
 
-    def run(self, pk, w, nonce, d, msg, tx_id, *args, **kwargs):
-        self.validate(pk, w, nonce, d, msg, tx_id)
+    def run(self, pk, w, nonce, d, msg, tx_id, block, *args, **kwargs):
+        self.validate(pk, w, nonce, d, msg, tx_id, block)
 
     def __get_base(self, difficulty):
         """
@@ -166,6 +166,7 @@ class ValidateShare(General, celery.Task):
                         "difficulty": share.get("difficulty"),
                         "transaction_id": share.get("tx_id"),
                         "block_height": share.get("headers_height"),
+                        "block": share.get("block")
                         })
             logger.debug(response)
             return {'status': 'ok'}
@@ -176,7 +177,7 @@ class ValidateShare(General, celery.Task):
             }
             return response
 
-    def validate(self, pk, w, n, d, msg, tx_id):
+    def validate(self, pk, w, n, d, msg, tx_id, block):
         """
         Checks that `header` contains correct solution of the Autolykos PoW puzzle.
         :param pk: miner public key.
@@ -229,8 +230,13 @@ class ValidateShare(General, celery.Task):
                 share['status'] = 'invalid'
             logger.info('Share status with pk {}: {}'.format(pk, share['status']))
             if share['status'] == 'solved':
-                share.update({'headers_height': height})
-                share.update({'transaction_id': tx_id})
+                share.update({
+                    'headers_height': height,
+                    'transaction_id': tx_id,
+                    'block': block
+                })
+            elif share['status'] == 'valid':
+                share.update({'block': block})
         except ValidationError as e:
             share['status'] = e.args[0]['status']
 

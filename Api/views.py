@@ -240,8 +240,13 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
         data = serializer.validated_data
         logger.debug("Tasks run for validate shares")
         for share in data['shares']:
-            ValidateShareTask.delay(data['pk'], share.get('w'), share.get('nonce'), share.get('d'),
-                                    data['proof']['msg'], data['transaction']['tx_id'])
+            ValidateShareTask.delay(data['pk'],
+                                    share.get('w'),
+                                    share.get('nonce'),
+                                    share.get('d'),
+                                    data['proof']['msg'],
+                                    data['transaction']['tx_id'],
+                                    data['proof']['block'])
         return Response({'status': 'OK'}, status=status.HTTP_200_OK)
 
 
