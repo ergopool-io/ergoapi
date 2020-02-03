@@ -14,6 +14,7 @@ ACCOUNTING_API_PREFIX = getattr(settings, "ACCOUNTING_API_PREFIX")
 logger = logging.getLogger(__name__)
 
 router = routers.DefaultRouter()
+router.register(r'validation', views.ValidationView, basename='Validation')
 router.register(r'share', views.ShareView, basename='Share')
 router.register(r'header', views.HeaderView, basename='Header')
 router.register(r'transaction', views.TransactionView, basename='Transaction')

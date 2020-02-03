@@ -12,7 +12,10 @@ CONFIGURATION_KEY_CHOICE = (
     # pool reward factor result precision
     ("REWARD_FACTOR_PRECISION", "Reward factor precision"),
     ("REWARD_FACTOR", "Reward factor"),
-    ("SHARE_CHUNK_SIZE", "Share chunk size")
+    ("SHARE_CHUNK_SIZE", "Share chunk size"),
+    # proof validation parameters
+    ("THRESHOLD_HEIGHT", "Threshold height"),
+    ("THRESHOLD_TIMESTAMP", "Threshold timestamp")
 )
 
 CONFIGURATION_KEY_TO_TYPE = frozendict({
@@ -20,7 +23,9 @@ CONFIGURATION_KEY_TO_TYPE = frozendict({
     'TOTAL_REWARD': 'int',
     "REWARD_FACTOR_PRECISION": "int",
     'REWARD_FACTOR': 'float',
-    'SHARE_CHUNK_SIZE': 'int'
+    'SHARE_CHUNK_SIZE': 'int',
+    'THRESHOLD_HEIGHT': 'int',
+    'THRESHOLD_TIMESTAMP': 'int'
 })
 
 CONFIGURATION_DEFAULT_KEY_VALUE = frozendict({
@@ -28,7 +33,10 @@ CONFIGURATION_DEFAULT_KEY_VALUE = frozendict({
     'TOTAL_REWARD': int(67.5e9),
     "REWARD_FACTOR_PRECISION": 2,
     'REWARD_FACTOR': 0.96296297,
-    'SHARE_CHUNK_SIZE': 10
+    'SHARE_CHUNK_SIZE': 10,
+    'THRESHOLD_HEIGHT': 10,
+    # ms with format time stamp (2 minute)
+    'THRESHOLD_TIMESTAMP': 120000
 })
 
 

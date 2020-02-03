@@ -45,7 +45,8 @@ class General:
             # check status code 2XX range is success
             return {
                 "response": response_json,
-                "status": "success" if 200 <= response.status_code <= 299 else "External Error"
+                "status": "success" if 200 <= response.status_code <= 299 else
+                ("Not Found" if response.status_code == 404 else "External Error")
             }
         except requests.exceptions.RequestException as e:
             logger.error("Can not resolve response from node")
