@@ -1022,7 +1022,8 @@ class TestValidateShare(TransactionTestCase):
             "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
             "block": {
                 "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
-                "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
+                "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"],
+
             }
         }
         block = ValidateShare()
@@ -1427,7 +1428,8 @@ class TestProofValidate(TransactionTestCase):
         self.assertEqual(response['msg'], 'dc56c734a2956a640bc4efe00c3b5fa5b9cd7337cd086f2ab735e71402a44668')
         self.assertEqual(response['block'], {
             "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
-            "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
+            "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"],
+            "path": '4'
         })
         self.assertEqual(response['message'], 'The proof is valid.')
         self.assertEqual(response['status'], 'valid')
