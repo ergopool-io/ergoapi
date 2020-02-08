@@ -166,7 +166,9 @@ class ValidateShare(General, celery.Task):
                         "difficulty": share.get("difficulty"),
                         "transaction_id": share.get("tx_id"),
                         "block_height": share.get("headers_height"),
-                        "block": share.get("block")
+                        "parent_id": share.get("block").get('parent'),
+                        "next_ids": share.get("block").get('next'),
+                        "path": share.get("block").get("path")
                         })
             logger.debug(response)
             return {'status': 'ok'}
