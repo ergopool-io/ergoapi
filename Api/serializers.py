@@ -652,9 +652,9 @@ class ValidateProofSerializer(serializers.Serializer):
         parent_id = header.parentId.hex()
         path = list()
         for block in block_chain.get('response'):
-            path.append({'id': block['id'], 'height': block['height']})
+            path.append(block['height'])
             if block['id'] == parent_id:
-                return path
+                return str(len(path))
 
         # request to Ergo Explorer for get fork block_chain if not exist in main block chain
         try:
@@ -663,17 +663,13 @@ class ValidateProofSerializer(serializers.Serializer):
             query = {'fromHeight': height - Configuration.objects.THRESHOLD_HEIGHT}
             response = requests.get(url, query)
             block_chain = response.json()
-            for fork in block_chain.get('forks'):
+            for fork in block_chain.get('forks')[::-1]:
                     for number, member in enumerate(fork['members']):
                         if parent_id == member[1]:
                             path_second.append(fork['members'][:number + 1])
-                            number_chain = path[0]['height'] - path_second[0][0] - 1
-                            path2 = [{'id': p[1], 'height': p[0]} for p in path_second]
-                            return path[:number_chain] + path2
-            return [{
-                'id': parent_id,
-                'height': header.height - 1
-            }]
+                            number_chain = path.index(fork.get('branchPointHeight'))
+                            return ','.join(str(number_chain + 1) + str(number + 1) + str(len(path_second)))
+            return '-1'
         except ValidationError as e:
             logger.error("Can not resolve response from Ergo Explorer")
             logger.error(e)
@@ -718,7 +714,7 @@ class ValidateProofSerializer(serializers.Serializer):
             logger.info('Proof is invalid (difficulty) for transaction id {}'.format(leaf))
             raise ValidationError({'message': 'The proof is invalid.', 'status': 'invalid'})
         # Generate path
-        self.__generate_path(header, height)
+        path = self.__generate_path(header, height)
 
         # Validate_merkle
         if not leaf_hash == txs_root:
@@ -729,7 +725,9 @@ class ValidateProofSerializer(serializers.Serializer):
         block_next = General.node_request('/blocks/at/{}'.format(str(header.height)), {'accept': 'application/json'})
         block = {
             'parent': header.parentId.hex(),
-            'next': block_next.get('response')}
+            'next': block_next.get('response'),
+            'path': path
+        }
 
         logger.info('Proof is valid for transaction id {}'.format(leaf))
         attrs.update({'msg': msg, 'block': block, 'message': 'The proof is valid.', 'status': 'valid'})
