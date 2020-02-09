@@ -47,8 +47,8 @@ class ValidateShare(General, celery.Task):
     def __init__(self):
         self._base_factor = None
 
-    def run(self, pk, w, nonce, d, msg, tx_id, block, *args, **kwargs):
-        self.validate(pk, w, nonce, d, msg, tx_id, block)
+    def run(self, pk, w, nonce, d, msg, tx_id, block, client_ip, *args, **kwargs):
+        self.validate(pk, w, nonce, d, msg, tx_id, block, client_ip)
 
     def __get_base(self, difficulty):
         """
@@ -174,7 +174,8 @@ class ValidateShare(General, celery.Task):
                         "block_height": share.get("headers_height"),
                         "parent_id": share.get("block").get('parent'),
                         "next_ids": share.get("block").get('next'),
-                        "path": share.get("block").get("path")
+                        "path": share.get("block").get("path"),
+                        "client_ip": share.get("client_ip")
                         })
             logger.debug(response)
             return {'status': 'ok'}
@@ -185,7 +186,7 @@ class ValidateShare(General, celery.Task):
             }
             return response
 
-    def validate(self, pk, w, n, d, msg, tx_id, block):
+    def validate(self, pk, w, n, d, msg, tx_id, block, client_ip):
         """
         Checks that `header` contains correct solution of the Autolykos PoW puzzle.
         :param pk: miner public key.
@@ -195,6 +196,7 @@ class ValidateShare(General, celery.Task):
                 corresponding to `pk`. The lower `d` is, the harder it was to find this solution.
         :param msg: Hash of meg_pre_image (header of block without pow)
         :param tx_id: Transaction Id
+        :param block: consist parent_id and next_ids candidate block and path
         :return:
         """
         # Create response for share
@@ -202,7 +204,8 @@ class ValidateShare(General, celery.Task):
             'miner': pk,
             'share': '',
             'status': '',
-            'difficulty': int()
+            'difficulty': int(),
+            'client_ip': client_ip
         }
         try:
             # Generate uniq id for share
