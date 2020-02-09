@@ -38,8 +38,14 @@ class ValidateShare(General, celery.Task):
     # biggest number <= 2^256 that is divisible by q without remainder
     valid_range = int(pow(2, 256) / ec_order) * ec_order
 
+    @property
+    def base_factor(self):
+        if not self._base_factor:
+            self._base_factor = Configuration.objects.POOL_BASE_FACTOR
+        return self._base_factor
+
     def __init__(self):
-        self.base_factor = Configuration.objects.POOL_BASE_FACTOR
+        self._base_factor = None
 
     def run(self, pk, w, nonce, d, msg, tx_id, block, *args, **kwargs):
         self.validate(pk, w, nonce, d, msg, tx_id, block)
