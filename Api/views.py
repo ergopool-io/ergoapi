@@ -15,7 +15,6 @@ from urllib.parse import urljoin, urlencode, urlparse, parse_qsl, urlunparse
 
 from Api import serializers
 from Api.models import Block, Configuration, CONFIGURATION_DEFAULT_KEY_VALUE, CONFIGURATION_KEY_CHOICE, CONFIGURATION_KEY_TO_TYPE
-from Api.serializers import ConfigurationSerializer
 from Api.utils.general import General
 from Api.tasks import ValidateShareTask
 
