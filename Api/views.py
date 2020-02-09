@@ -237,6 +237,9 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        # Get ip of the client that send request
+        client_ip = request.META.get('REMOTE_ADDR')
+
         logger.debug("Tasks run for validate shares")
         for share in data['shares']:
             ValidateShareTask.delay(data['pk'],
@@ -245,7 +248,8 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
                                     share.get('d'),
                                     data['proof']['msg'],
                                     data['transaction']['tx_id'],
-                                    data['proof']['block'])
+                                    data['proof']['block'],
+                                    client_ip)
         return Response({'status': 'OK'}, status=status.HTTP_200_OK)
 
 
