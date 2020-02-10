@@ -6,3 +6,4 @@ ECPy==0.10.0
 coverage==5.0.2
 frozendict==1.2
 celery>=4.0,<4.5
+django-cors-headers
