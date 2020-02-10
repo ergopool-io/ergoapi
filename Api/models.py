@@ -1,18 +1,43 @@
-from django.db import models
+from pydoc import locate
 
-KEY_CHOICES = (
+from django.db import models
+from frozendict import frozendict
+import logging
+
+logger = logging.getLogger(__name__)
+
+CONFIGURATION_KEY_CHOICE = (
     ("POOL_BASE_FACTOR", "Pool base factor"),
-    ("REWARD", "Reward"),
+    ("TOTAL_REWARD", "Reward"),
+    # pool reward factor result precision
+    ("REWARD_FACTOR_PRECISION", "Reward factor precision"),
     ("REWARD_FACTOR", "Reward factor"),
-    ("SHARE_CHUNK_SIZE", "Share chunk size")
+    ("SHARE_CHUNK_SIZE", "Share chunk size"),
+    # proof validation parameters
+    ("THRESHOLD_HEIGHT", "Threshold height"),
+    ("THRESHOLD_TIMESTAMP", "Threshold timestamp")
 )
 
-DEFAULT_KEY_VALUES = {
+CONFIGURATION_KEY_TO_TYPE = frozendict({
+    'POOL_BASE_FACTOR': 'int',
+    'TOTAL_REWARD': 'int',
+    "REWARD_FACTOR_PRECISION": "int",
+    'REWARD_FACTOR': 'float',
+    'SHARE_CHUNK_SIZE': 'int',
+    'THRESHOLD_HEIGHT': 'int',
+    'THRESHOLD_TIMESTAMP': 'int'
+})
+
+CONFIGURATION_DEFAULT_KEY_VALUE = frozendict({
     'POOL_BASE_FACTOR': 1000,
-    'REWARD': 67.5,
-    'REWARD_FACTOR': 1,
-    'SHARE_CHUNK_SIZE': 10
-}
+    'TOTAL_REWARD': int(67.5e9),
+    "REWARD_FACTOR_PRECISION": 2,
+    'REWARD_FACTOR': 0.96296297,
+    'SHARE_CHUNK_SIZE': 10,
+    'THRESHOLD_HEIGHT': 10,
+    # ms with format time stamp (2 minute)
+    'THRESHOLD_TIMESTAMP': 120000
+})
 
 
 class Block(models.Model):
@@ -32,19 +57,32 @@ class ConfigurationManager(models.Manager):
         :param attr:
         :return:
         """
-        if attr in [key for (key, temp) in KEY_CHOICES]:
+        if attr in [key for (key, temp) in CONFIGURATION_KEY_CHOICE]:
             configurations = dict(self.all().values_list('key', 'value'))
             if attr in configurations:
-                return configurations[attr]
-            else:
-                return DEFAULT_KEY_VALUES[attr]
+                val = configurations[attr]
+                val_type = CONFIGURATION_KEY_TO_TYPE[attr]
+
+                # trying to convert value to value_type
+                try:
+                    val = locate(val_type)(val)
+                    return val
+
+                except:
+                    # failed to convert, return default value
+                    logger.error('Problem in configuration; {} with value {} is not compatible with type {}'
+                                 .format(attr, val, val_type))
+                    return CONFIGURATION_DEFAULT_KEY_VALUE[attr]
+
+            return CONFIGURATION_DEFAULT_KEY_VALUE[attr]
+
         else:
             return super(ConfigurationManager, self).__getattribute__(attr)
 
 
 class Configuration(models.Model):
-    key = models.CharField(max_length=255, choices=KEY_CHOICES, blank=False)
-    value = models.FloatField(default=0)
+    key = models.CharField(max_length=255, choices=CONFIGURATION_KEY_CHOICE, blank=False)
+    value = models.CharField(max_length=255, blank=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

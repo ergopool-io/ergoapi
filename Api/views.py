@@ -1,4 +1,5 @@
 import os
+from pydoc import locate
 
 import requests
 from django.conf import settings
@@ -7,14 +8,15 @@ from django.views import View
 from rest_framework import viewsets, mixins, status
 from rest_framework.response import Response
 from rest_framework import filters
-from rest_framework.authentication import SessionAuthentication
+from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
 import logging
 from urllib.parse import urljoin, urlencode, urlparse, parse_qsl, urlunparse
 
 from Api import serializers
-from Api.models import Block, Configuration, DEFAULT_KEY_VALUES
+from Api.models import Block, Configuration, CONFIGURATION_DEFAULT_KEY_VALUE, CONFIGURATION_KEY_CHOICE, CONFIGURATION_KEY_TO_TYPE
 from Api.utils.general import General
+from Api.tasks import ValidateShareTask
 
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL")
 ACCOUNTING_HOST = getattr(settings, "ACCOUNTING_HOST")
@@ -90,9 +92,6 @@ class TransactionView(viewsets.GenericViewSet, mixins.CreateModelMixin):
     def get_queryset(self):
         return None
 
-    def perform_create(self, serializer):
-        pass
-
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -112,7 +111,7 @@ class ConfigurationViewSet(viewsets.GenericViewSet,
                            mixins.CreateModelMixin,
                            mixins.ListModelMixin):
     # For session authentication
-    authentication_classes = [SessionAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     # For token authentication
     permission_classes = (IsAuthenticated,)
     serializer_class = serializers.ConfigurationSerializer
@@ -131,13 +130,51 @@ class ConfigurationViewSet(viewsets.GenericViewSet,
         """
         key = serializer.validated_data['key']
         value = serializer.validated_data['value']
-        configurations = Configuration.objects.filter(key=key)
-        if not configurations:
-            serializer.save()
-        else:
-            configuration = Configuration.objects.get(key=key)
-            configuration.value = value
-            configuration.save()
+        if key in [x[0] for x in CONFIGURATION_KEY_CHOICE]:
+            val_type = CONFIGURATION_KEY_TO_TYPE[key]
+            try:
+                locate(val_type)(value)
+
+            except:
+                return
+
+            configurations = Configuration.objects.filter(key=key)
+            if not configurations:
+                serializer.save()
+            else:
+                configuration = Configuration.objects.get(key=key)
+                configuration.value = value
+                configuration.save()
+
+        try:
+            if key in serializer.accounting_choices:
+                requests.post(urljoin(ACCOUNTING, 'conf/'), data={'key': key, 'value': value})
+
+        except requests.exceptions.RequestException:
+            logger.critical('Could not connect to accounting!')
+
+    def list(self, request, *args, **kwargs):
+        """
+        overrides list method to return list of key: value instead of list of dicts
+        """
+        configs = dict(CONFIGURATION_DEFAULT_KEY_VALUE)
+        for conf in Configuration.objects.all():
+            val_type = CONFIGURATION_KEY_TO_TYPE[conf.key]
+            configs[conf.key] = locate(val_type)(conf.value)
+
+        res = None
+        try:
+            res = requests.get(urljoin(ACCOUNTING, 'conf/'))
+
+        except requests.exceptions.RequestException:
+            logger.critical('Could not connect to accounting!')
+
+        if res and res.status_code == status.HTTP_200_OK:
+            res = res.json()
+            for key, value in res.items():
+                configs[key] = value
+
+        return Response(configs, status=status.HTTP_200_OK)
 
 
 class ConfigurationValueViewSet(viewsets.GenericViewSet,
@@ -165,55 +202,55 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet,
         :param pk: if this parameter set return list miner specific configuration otherwise return general configuration
         :return: a json contain all configuration
         """
-        result = DEFAULT_KEY_VALUES.copy()
+        result = dict(CONFIGURATION_DEFAULT_KEY_VALUE)
         config = Configuration.objects.all()
         for x in config.values_list('key', flat=True):
-            result[x] = config.get(key=x).value
-        reward = int(result['REWARD'] * result['REWARD_FACTOR'] * pow(10, 9))
+            val_type = CONFIGURATION_KEY_TO_TYPE[x]
+            result[x] = locate(val_type)(config.get(key=x).value)
+
+        PRECISION = Configuration.objects.REWARD_FACTOR_PRECISION
+        REWARD = round((result['TOTAL_REWARD'] / 1e9) * result['REWARD_FACTOR'], PRECISION)
+        REWARD = int(REWARD * 1e9)
         data_node = General.node_request('wallet/addresses', {'accept': 'application/json', 'api_key': settings.API_KEY})
         if data_node['status'] == '400':
             return data_node
         else:
             wallet_address = data_node.get('response')[0]
         return {
-            'reward': reward,
+            'reward': REWARD,
             'wallet_address': wallet_address,
             'pool_base_factor': result['POOL_BASE_FACTOR'],
             'max_chunk_size': result['SHARE_CHUNK_SIZE'],
         }
 
 
-class DashboardView(viewsets.GenericViewSet,
-                    mixins.ListModelMixin,
-                    mixins.RetrieveModelMixin):
+class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
+    serializer_class = serializers.ValidationSerializer
 
-    def get_queryset(self):
-        return None
+    def create(self, request, *args, **kwargs):
+        data = request.data
+        if len(data['shares']) > Configuration.objects.SHARE_CHUNK_SIZE:
+            return Response({
+                "status": "error",
+                "message": "too big chunk"
+            }, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        # Get ip of the client that send request
+        client_ip = request.META.get('REMOTE_ADDR')
 
-    def list(self, request, *args, **kwargs):
-        return self.get_response(request)
-
-    def retrieve(self, request, *args, **kwargs):
-        return self.get_response(request, kwargs.get("pk").lower())
-
-    def get_response(self, request, pk=None):
-        """
-        Returns information for this round of shares.
-        In the response, there is total shares count of this round and information about each miner balances.
-        If the pk is set in url parameters, then information is just about that miner.
-        :param request:
-        :param pk:
-        :return:
-        """
-        url = os.path.join(ACCOUNTING, "dashboard/")
-        try:
-            response = requests.get(url + pk).json() if pk else requests.get(url).json()
-            return Response(response, status=status.HTTP_200_OK)
-        except requests.exceptions.RequestException as e:
-            logger.error('Can not resolve response from Accounting for pk {}'.format(pk))
-            logger.error(e)
-            response = {'message': "Internal Server Error"}
-            return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.debug("Tasks run for validate shares")
+        for share in data['shares']:
+            ValidateShareTask.delay(data['pk'],
+                                    share.get('w'),
+                                    share.get('nonce'),
+                                    share.get('d'),
+                                    data['proof']['msg'],
+                                    data['transaction']['tx_id'],
+                                    data['proof']['block'],
+                                    client_ip)
+        return Response({'status': 'OK'}, status=status.HTTP_200_OK)
 
 
 def builder_viewset(method, options):
