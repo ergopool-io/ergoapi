@@ -1,0 +1,25 @@
+{
+  "pk": "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C",
+  "addresses": {},
+  "proof": {},
+  "shares": [
+    {
+      "w": "0370b32976a9bc37654e6b34390c8dd30d3dc44c3f52e9421cc4ec31ef6a1bca4c",
+      "nonce": "00000237d4e1e20c",
+      "d": 46242367293113109317096091884217605312791141894953570819396709798327,
+      "msg": "fc0ecfe7a0559c556cb5fe25dd9259e5b548a33502be0c474cd581f77f0acb89",
+      "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"
+    },
+    {
+      "w": "0370b32976a9bc37654e6b34390c8dd30d3dc44c3f52e9421cc4ec31ef6a1bca4c",
+      "nonce": "00000237d4e1e20c",
+      "d": 46242367293113109317096091884217605312791141894953570819396709798327,
+      "msg": "fc0ecfe7a0559c556cb5fe25dd9259e5b548a33502be0c474cd581f77f0acb89",
+      "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"
+    }
+  ],
+  "transaction": {
+    "transaction": {
+    }
+  }
+}

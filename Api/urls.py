@@ -9,17 +9,17 @@ from Api import views
 
 ACCOUNTING_URL = getattr(settings, "ACCOUNTING_URL")
 ACCOUNTING_API_IGNORE = getattr(settings, "ACCOUNTING_API_IGNORE")
-ACCOUNTING_API_PREFIX= getattr(settings, "ACCOUNTING_API_PREFIX")
+ACCOUNTING_API_PREFIX = getattr(settings, "ACCOUNTING_API_PREFIX")
 
 logger = logging.getLogger(__name__)
 
 router = routers.DefaultRouter()
+router.register(r'validation', views.ValidationView, basename='Validation')
 router.register(r'share', views.ShareView, basename='Share')
 router.register(r'header', views.HeaderView, basename='Header')
 router.register(r'transaction', views.TransactionView, basename='Transaction')
 router.register(r'config/manage', views.ConfigurationViewSet, basename='Config Manage')
 router.register(r'config/value', views.ConfigurationValueViewSet, basename='Config Value')
-router.register(r'dashboard', views.DashboardView, basename='Dashboard')
 
 # Add accounting service APIs
 try:
