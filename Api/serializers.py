@@ -6,7 +6,7 @@ from rest_framework.exceptions import ValidationError
 from Api.models import Configuration, Block
 from Api.utils.general import General
 from Api.utils.header import Reader, HeaderSerializer
-from ErgoApi.settings import API_KEY, ACCOUNTING_URL, ERGO_EXPLORER_ADDRESS
+from ErgoApi.settings import API_KEY, ACCOUNTING_URL, ERGO_EXPLORER_ADDRESS, VERIFIER_ADDRESS
 
 from django.utils.deconstruct import deconstructible
 from codecs import decode
@@ -402,11 +402,30 @@ class TransactionSerializer(serializers.Serializer, General):
         data_node = self.node_request('transactions/check',
                                       {'accept': 'application/json', 'content-type': 'application/json'},
                                       data=transaction, request_type="post")
+
+        transaction_ok = False
         if data_node['status'] == 'External Error':
+            node_result = data_node['response']
+            required_msg = 'Scripts of all transaction inputs should pass verification'
+            if 'detail' in node_result and required_msg in node_result['detail']:
+                miner_pk = attrs['pk']
+                # there is a chance that custom verifier verifies this transaction
+                res = requests.post(urljoin(VERIFIER_ADDRESS, 'verify'), json={'minerPk': miner_pk,
+                                                                               'transaction': transaction})
+                if res.status_code == status.HTTP_200_OK:
+                    result = res.json()
+                    if result['success'] and result['verified']:
+                        # has been verified with custom context
+                        logger.info('provided transaction was verified with custom verifier')
+                        transaction_ok = True
+
+        if data_node['status'] == 'External Error' and not transaction_ok:
             logger.error('Node failed to validate transaction')
             raise ValidationError({"message": data_node['response']})
         else:
-            tx_id = data_node.get('response')
+            tx_id = data_node.get('response', None)
+            if transaction_ok:
+                tx_id = transaction['id']
             response['tx_id'] = tx_id
             if tx_id == transaction['id']:
                 logger.info("Getting wallet addresses to validate transaction.")
