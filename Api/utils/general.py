@@ -1,4 +1,4 @@
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse, urlunparse
 
 from ErgoApi.settings import NODE_ADDRESS
 from hashlib import blake2b
@@ -53,3 +53,21 @@ class General:
             logger.error(e)
             response = {'status': 'error', 'message': 'Can not resolve response from node'}
             raise Exception(response)
+
+
+def modify_pagination(request, result):
+    if 'next' in result:
+        if result['next']:
+            pagination = list(urlparse(result['next']))
+            url_parts = list(urlparse(request.build_absolute_uri()))
+            pagination[1] = url_parts[1]
+            pagination[2] = url_parts[2]
+            result['next'] = urlunparse(pagination)
+    if 'previous' in result:
+        if result['previous']:
+            pagination = list(urlparse(result['previous']))
+            url_parts = list(urlparse(request.build_absolute_uri()))
+            pagination[1] = url_parts[1]
+            pagination[2] = url_parts[2]
+            result['previous'] = urlunparse(pagination)
+    return result
