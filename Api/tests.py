@@ -1206,11 +1206,16 @@ class TestValidateShare(TransactionTestCase):
                 "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
                 "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
             },
+            "addresses": {
+                "miner": "test",
+                "lock": "test",
+                "withdraw": "test"
+            },
             "client_ip": '127.0.0.1'
         }
         block = ValidateShare()
         block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'],
-                       share['block'], share['client_ip'])
+                       share['block'], share['addresses'], share['client_ip'])
         accounting_mock.assert_has_calls([call({
             'miner': '03cd07843e1f7e25407eda2369ad644854e532e381ab30d6488970e0b87d060d16',
             'share': 'a8794c0719bbe03afe6ff4926d56d59aeb3c2438d7396b7c4c4fd5aa064288df',
@@ -1221,6 +1226,11 @@ class TestValidateShare(TransactionTestCase):
             'block': {
                 'parent': '46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48',
                 'next': ['c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03']
+            },
+            "addresses": {
+                "miner": "test",
+                "lock": "test",
+                "withdraw": "test"
             },
             "client_ip": '127.0.0.1'
         })])
@@ -1245,11 +1255,16 @@ class TestValidateShare(TransactionTestCase):
                 "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"],
 
             },
+            "addresses": {
+                "miner": "test",
+                "lock": "test",
+                "withdraw": "test"
+            },
             "client_ip": '127.0.0.1'
         }
         block = ValidateShare()
         block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'],
-                       share['block'], share['client_ip'])
+                       share['block'], share['addresses'], share['client_ip'])
         accounting_mock.assert_has_calls([call({
             'miner': '03cd07843e1f7e25407eda2369ad644854e532e381ab30d6488970e0b87d060d16',
             'share': 'a8794c0719bbe03afe6ff4926d56d59aeb3c2438d7396b7c4c4fd5aa064288df',
@@ -1258,6 +1273,11 @@ class TestValidateShare(TransactionTestCase):
             "block": {
                 "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
                 "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
+            },
+            "addresses": {
+                "miner": "test",
+                "lock": "test",
+                "withdraw": "test"
             },
             "client_ip": '127.0.0.1'
         })])
@@ -1283,12 +1303,17 @@ class TestValidateShare(TransactionTestCase):
                 "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
                 "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
             },
+            "addresses": {
+                "miner": "test",
+                "lock": "test",
+                "withdraw": "test"
+            },
             "client_ip": '127.0.0.1'
         }
 
         block = ValidateShare()
         block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'],
-                       share['block'], share['client_ip'])
+                       share['block'], share['addresses'], share['client_ip'])
         # check status for this block is invalid
         accounting_mock.assert_has_calls([call({
             'miner': '0354043bd5f16526b0184e6521a0bd462783f8B178db37ec034328a23fed4855a9',
@@ -1366,12 +1391,17 @@ class TestValidateShare(TransactionTestCase):
                 "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
                 "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
             },
+            "addresses": {
+                "miner": "test",
+                "lock": "test",
+                "withdraw": "test"
+            },
             "client_ip": '127.0.0.1'
         }
 
         block = ValidateShare()
-        block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'], share['block']
-                       , share["client_ip"])
+        block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'],
+                       share['block'], share['addresses'], share["client_ip"])
         accounting_mock.assert_has_calls([call({
             'miner': '0354043bd5f16526b0184e6521a0bd462783f8b178db37ec034328a23fed4855a9',
             'share': '2e2c55ba14e05fa1291621afd5611f8a828f5b0dfeea6e8c7724327bba47a7ef',
