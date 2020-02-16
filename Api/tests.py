@@ -1163,7 +1163,6 @@ class TestValidateShare(TransactionTestCase):
             return {
                 "status": "success",
                 "response": {
-                    "headersHeight": 41496,
                     "difficulty": Configuration.objects.POOL_BASE_FACTOR
                 }
             }
@@ -1203,6 +1202,7 @@ class TestValidateShare(TransactionTestCase):
             "msg": "fc0ecfe7a0559c556cb5fe25dd9259e5b548a33502be0c474cd581f77f0acb89",
             "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
             "block": {
+                "height": 41496,
                 "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
                 "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
             },
@@ -1221,9 +1221,9 @@ class TestValidateShare(TransactionTestCase):
             'share': 'a8794c0719bbe03afe6ff4926d56d59aeb3c2438d7396b7c4c4fd5aa064288df',
             'status': 'solved',
             'difficulty': 1,
-            'headers_height': 41496,
             'transaction_id': '53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5',
             'block': {
+                'height': 41496,
                 'parent': '46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48',
                 'next': ['c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03']
             },
@@ -1684,6 +1684,7 @@ class TestProofValidate(TransactionTestCase):
         # check the content of the response
         self.assertEqual(response['msg'], 'dc56c734a2956a640bc4efe00c3b5fa5b9cd7337cd086f2ab735e71402a44668')
         self.assertEqual(response['block'], {
+            "height": 40671,
             "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
             "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"],
             "path": '4'
