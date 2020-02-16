@@ -232,7 +232,7 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
 
     def create(self, request, *args, **kwargs):
         data = request.data
-        if len(data['shares']) > Configuration.objects.SHARE_CHUNK_SIZE:
+        if len(data.get('shares', [])) > Configuration.objects.SHARE_CHUNK_SIZE:
             return Response({
                 "status": "error",
                 "message": "too big chunk"
@@ -244,7 +244,7 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
         client_ip = request.META.get('REMOTE_ADDR')
 
         logger.debug("Tasks run for validate shares")
-        for share in data['shares']:
+        for share in data.get('shares', []):
             ValidateShareTask.delay(data['pk'],
                                     share.get('w'),
                                     share.get('nonce'),
