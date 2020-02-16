@@ -81,4 +81,4 @@ LOGGING = {
 NUMBER_OF_LOG = os.environ.get("NUMBER_OF_LOG")
 
 # set your approprate broker url, e.g, rabbitmq or redis
-CELERY_BROKER_URL = 'amqp://guest:guest@localhost:5672//'
+CELERY_BROKER_URL = os.environ.get("BROKER_URL")
