@@ -743,6 +743,7 @@ class ValidateProofSerializer(serializers.Serializer):
         # Set parent and next block of candidate block
         block_next = General.node_request('/blocks/at/{}'.format(str(header.height)), {'accept': 'application/json'})
         block = {
+            'height': header.height,
             'parent': header.parentId.hex(),
             'next': block_next.get('response'),
             'path': path
