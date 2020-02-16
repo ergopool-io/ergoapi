@@ -252,6 +252,7 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
                                     data['proof']['msg'],
                                     data['transaction']['tx_id'],
                                     data['proof']['block'],
+                                    data['addresses'],
                                     client_ip)
         return Response({'status': 'OK'}, status=status.HTTP_200_OK)
 
