@@ -172,7 +172,7 @@ class ValidateShare(General, celery.Task):
                         "status": share.get("status"),
                         "difficulty": share.get("difficulty"),
                         "transaction_id": share.get("tx_id"),
-                        "block_height": share.get("headers_height"),
+                        "block_height": share.get("block").get('height'),
                         "parent_id": share.get("block").get('parent'),
                         "next_ids": share.get("block").get('next'),
                         "path": share.get("block").get("path"),
@@ -216,9 +216,8 @@ class ValidateShare(General, celery.Task):
         try:
             # Generate uniq id for share
             share_id = self.blake((msg + n + pk + w).encode('utf-8'), 'hex')
-            # Request to node for get headersHeight
+            # Request to node for get difficulty
             data_node = self.node_request('info', {'accept': 'application/json'})
-            height = data_node.get('response').get('headersHeight')
             difficulty = data_node.get('response').get('difficulty')
             share['difficulty'] = int(difficulty / self.base_factor)
             share['share'] = share_id
@@ -248,12 +247,12 @@ class ValidateShare(General, celery.Task):
             logger.info('Share status with pk {}: {}'.format(pk, share['status']))
             if share['status'] == 'solved':
                 share.update({
-                    'headers_height': height,
                     'transaction_id': tx_id,
                     'block': block,
                     'addresses': addresses
                 })
             elif share['status'] == 'valid':
+                block.pop('height', None)
                 share.update({
                     'block': block,
                     'addresses': addresses
