@@ -34,7 +34,7 @@ ACCOUNTING_PORT = int(os.environ.get("ACCOUNTING_PORT"))
 ACCOUNTING_PROTOCOL = os.environ.get("ACCOUNTING_PROTOCOL")
 
 # Allowed Hosts
-ALLOWED_HOSTS = os.environ.get('HOST').split(",")
+ALLOWED_HOSTS = os.environ.get('HOST', "").split(",")
 
 # Logging config
 # You may want to uncomment mail handler in production!
