@@ -1860,9 +1860,32 @@ class TestValidation(TransactionTestCase):
                 }]
             }
 
+    def mocked_requests_get_address_to_pk(*args, **kwargs):
+        """
+        mock function requests.get
+        """
+
+        class MockResponse:
+            def __init__(self, json_data, status_code):
+                self.json_data = json_data
+                self.status_code = status_code
+
+            def json(self):
+                return self.json_data
+
+        url = args[0]
+        if url == urljoin(VERIFIER_ADDRESS, 'address_to_pk'):
+            return MockResponse({
+                'success': True,
+                'id': '02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C',
+            }, 200)
+
+        return None
+
     @patch("Api.tasks.ValidateShareTask.delay")
     @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
-    def test_post_valid(self, mock_node, mock_task):
+    @patch("requests.get", side_effect=mocked_requests_get_address_to_pk)
+    def test_post_valid(self, mock_node, mock_task, mock3):
         """
         In this scenario we want to test the functionality of Validation API when
         it is called by a http "post" method.
@@ -1885,7 +1908,8 @@ class TestValidation(TransactionTestCase):
         self.assertEqual(response.json(), result)
 
     @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request_invalid)
-    def test_post_invalid(self, mock_node):
+    @patch("requests.get", side_effect=mocked_requests_get_address_to_pk)
+    def test_post_invalid(self, mock_node, mock2):
         """
         In this scenario we want to test the functionality of Validation API when
         it is called by a http "post" method.
