@@ -448,10 +448,11 @@ class TransactionSerializer(serializers.Serializer, General):
                                 raise ValidationError({"message": data_node['response']})
                             # Check address after convert ergo tree that would have existed in the wallet_address
                             elif data_node.get('response')['address'] in wallet_address:
-                                    value = value + output['value']
+                                value = value + output['value']
                     # Sum value of output field should be bigger than reward policy pool.
                     PRECISION = Configuration.objects.REWARD_FACTOR_PRECISION
-                    REWARD = round((Configuration.objects.TOTAL_REWARD / 1e9) * Configuration.objects.REWARD_FACTOR, PRECISION)
+                    REWARD = round((Configuration.objects.TOTAL_REWARD / 1e9) * Configuration.objects.REWARD_FACTOR,
+                                   PRECISION)
                     REWARD = int(REWARD * 1e9)
                     if value >= REWARD:
                         logger.info('Transaction is valid.')
@@ -683,11 +684,11 @@ class ValidateProofSerializer(serializers.Serializer):
             response = requests.get(url, query)
             block_chain = response.json()
             for fork in block_chain.get('forks')[::-1]:
-                    for number, member in enumerate(fork['members']):
-                        if parent_id == member[1]:
-                            path_second.append(fork['members'][:number + 1])
-                            number_chain = path.index(fork.get('branchPointHeight'))
-                            return ','.join(str(number_chain + 1) + str(number + 1) + str(len(path_second)))
+                for number, member in enumerate(fork['members']):
+                    if parent_id == member[1]:
+                        path_second.append(fork['members'][:number + 1])
+                        number_chain = path.index(fork.get('branchPointHeight'))
+                        return ','.join(str(number_chain + 1) + str(number + 1) + str(len(path_second)))
             return '-1'
         except ValidationError as e:
             logger.error("Can not resolve response from Ergo Explorer")
@@ -723,7 +724,8 @@ class ValidateProofSerializer(serializers.Serializer):
 
         # Validate timestamp after that validate height and after that validate difficulty and after that generate path
         # from last header - THRESHOLD_HEIGHT to the height of header that works on that.
-        if header.timestamp < last_header.get('response')[0].get('timestamp') - Configuration.objects.THRESHOLD_TIMESTAMP:
+        if header.timestamp < last_header.get('response')[0].get(
+                'timestamp') - Configuration.objects.THRESHOLD_TIMESTAMP:
             logger.info('Proof is invalid (timestamp) for transaction id {}'.format(leaf))
             raise ValidationError({'message': 'The proof is invalid.', 'status': 'invalid'})
         if header.height <= height - Configuration.objects.THRESHOLD_HEIGHT:
@@ -786,13 +788,145 @@ class AddressesSerializer(serializers.Serializer):
 class ValidationSerializer(serializers.Serializer):
     pk = serializers.CharField(validators=[HexValidator()])
     addresses = AddressesSerializer(many=False)
-    transaction = ValidateTransactionSerializer(many=False)
+    transaction = serializers.JSONField()
     proof = ValidateProofSerializer(many=False)
     shares = ValidationShareSerializer(many=True)
 
+    def __validate_transaction_node(self, attrs):
+        transaction = attrs['transaction']
+        pk = attrs['pk']
+        msg_pre_image = attrs['proof']['msg_pre_image']
+
+        # Send request to node for validate transaction
+        tx_id = None
+        data_node = General.node_request('transactions/check', data=transaction, request_type="post")
+        if data_node['status'] == 'success':
+            tx_id = data_node['response']
+
+        transaction_ok = False
+        if data_node['status'] == 'External Error':
+            node_result = data_node['response']
+            required_msg_custom = 'Scripts of all transaction inputs should pass verification'
+            required_msg_mined = 'Every input of the transaction should be in UTXO'
+            if 'detail' in node_result and required_msg_custom in node_result['detail']:
+                miner_pk = pk
+                # there is a chance that custom verifier verifies this transaction
+                res = requests.post(urljoin(VERIFIER_ADDRESS, 'verify'), json={'minerPk': miner_pk,
+                                                                               'transaction': transaction})
+                if res.status_code == status.HTTP_200_OK:
+                    result = res.json()
+                    if result['success'] and result['verified']:
+                        # has been verified with custom context
+                        logger.info('provided transaction was verified with custom verifier')
+                        transaction_ok = True
+
+            elif 'detail' in node_result and required_msg_mined in node_result['detail']:
+                reader = Reader(msg_pre_image)
+                header = HeaderSerializer.parse_without_pow(reader)
+
+                height = str(header.height)
+                params = {'fromHeight': height, 'toHeight': height}
+                data_node = General.node_request('blocks/chainSlice', params=params)
+
+                logger.info('chain slice returned {}'.format(data_node))
+
+                if data_node['status'] == 'success' and len(data_node['response']) == 1:
+                    pow_solutions = data_node['response'][0]['powSolutions']
+                    expected = [pow_solutions['pk'], pow_solutions['n'], pow_solutions['w'], pow_solutions['d']]
+                    share = attrs['share']
+                    cur = [attrs['pk'], share['nonce'], share['w'], share['d']]
+
+                    if expected != cur:
+                        logger.warning('solved share was not confirmed as a valid one!')
+                        raise ValidationError({"message": 'Invalid solved share!'})
+
+                    logger.info('solved share accepted even though its input boxes was not ok!')
+                    transaction_ok = True
+
+        if data_node['status'] == 'External Error' and not transaction_ok:
+            logger.error('Node failed to validate transaction')
+            raise ValidationError({"message": data_node['response']})
+
+        if transaction_ok:
+            res = requests.get(urljoin(VERIFIER_ADDRESS, 'get_id'), json=transaction)
+            if res.status_code == status.HTTP_200_OK:
+                result = res.json()
+                tx_id = result['id']
+
+        return tx_id
+
+    def __value_of_transaction(self, wallet_address, transaction):
+        value = 0
+        if 'outputs' in transaction:
+            for output in transaction['outputs']:
+                # Send request to node for Generate Ergo address from hex-encoded ErgoTree
+                data_node = General.node_request('utils/ergoTreeToAddress/' + output['ergoTree'],
+                                                 {'accept': 'application/json'})
+                if data_node['status'] == 'External Error':
+                    raise ValidationError({
+                        "message": data_node['response'],
+                        "status": "failed"
+                    })
+                # Check address after convert ergo tree that would have existed in the wallet_address
+                elif data_node.get('response')['address'] in wallet_address:
+                    value = value + output['value']
+        return value
+
+    def __validate_transaction(self, attrs):
+        """
+        Validate transaction with request to node and check tx_id response of transactions/check with tx_id in
+         transaction json then get ergo_tree from output field and convert to address wallet and check with wallet
+         addresses in the event that wallet address was true check sum value of output field that be greater than reward
+        :return: status of transaction
+        """
+        response = {
+            'message': '',
+            'tx_id': ''
+        }
+        transaction = attrs['transaction']
+
+        # Send request to node for validate transaction
+        tx_id = self.__validate_transaction_node(attrs)
+        response['tx_id'] = tx_id
+
+        logger.info("Getting wallet addresses to validate transaction.")
+        # Send request to node for get list of wallet addresses
+        data_node = General.node_request('wallet/addresses',
+                                         {'accept': 'application/json', 'content-type': 'application/json',
+                                          'api_key': API_KEY})
+        if data_node['status'] == 'External Error':
+            logger.error('Error while getting wallet addresses.')
+            raise ValidationError({
+                "message": data_node['response'],
+                "status": "failed"
+            })
+        else:
+            wallet_address = data_node.get('response')
+            # Calculate value of payed in transaction
+            value = self.__value_of_transaction(wallet_address, transaction)
+            # Sum value of output field should be bigger than reward policy pool.
+            REWARD_FACTOR = Configuration.objects.REWARD_FACTOR
+            PRECISION = Configuration.objects.REWARD_FACTOR_PRECISION
+            TOTAL_REWARD = round((Configuration.objects.TOTAL_REWARD / 1e9) * REWARD_FACTOR, PRECISION)
+            TOTAL_REWARD = int(TOTAL_REWARD * 1e9)
+
+            if value >= TOTAL_REWARD:
+                logger.info('Transaction is valid.')
+                response['status'] = 'valid'
+                response['message'] = "Transaction is valid"
+            else:
+                logger.error('Transaction is invalid, either wallet address is invalid or the value')
+                raise ValidationError({
+                    "message": "Wallet address pool or value of transaction is invalid",
+                    "status": "invalid"
+                })
+        attrs.update(response)
+        return attrs
+
     def validate(self, attrs):
+        self.__validate_transaction(attrs)
         leaf = attrs['proof']['leaf']
-        tx_id = attrs['transaction']['tx_id']
+        tx_id = attrs['tx_id']
         if leaf == tx_id:
             return attrs
         else:
@@ -804,4 +938,3 @@ class ValidationSerializer(serializers.Serializer):
 
     class Meta:
         fields = ['pk', 'addresses', 'transaction', 'proof', 'shares']
-

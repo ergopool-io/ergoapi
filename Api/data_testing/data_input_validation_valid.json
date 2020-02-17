@@ -21,7 +21,6 @@
       "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"
     }
   ],
-  "transaction": {
     "transaction": {
       "id": "7fdfae7a85ad26ffc838d7c6042cbfc67781e83bc846c9d652f1023dc795e30e",
       "inputs": [
@@ -68,5 +67,4 @@
       ],
       "size": 300
     }
-  }
 }
