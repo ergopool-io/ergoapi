@@ -821,7 +821,7 @@ class ValidationSerializer(serializers.Serializer):
                         transaction_ok = True
 
             elif 'detail' in node_result and required_msg_mined in node_result['detail']:
-                reader = Reader(msg_pre_image)
+                reader = Reader(decode(msg_pre_image, 'hex'))
                 header = HeaderSerializer.parse_without_pow(reader)
 
                 height = str(header.height)
@@ -923,7 +923,25 @@ class ValidationSerializer(serializers.Serializer):
         attrs.update(response)
         return attrs
 
+    def __validate_miner_address(self, attr):
+        pk = attr['pk']
+        miner_address = attr['addresses']['miner']
+        res = requests.get(urljoin(VERIFIER_ADDRESS, 'address_to_pk'), json=miner_address)
+        if res.status_code != 200:
+            raise ValidationError({
+                "message": "Could not verify miner address integrity with miner pk!",
+                "status": "invalid"
+            })
+
+        expected_pk = res.json()['id'].lower()
+        if pk.lower() != expected_pk:
+            raise ValidationError({
+                "message": "Could not verify miner address integrity with miner pk!",
+                "status": "invalid"
+            })
+
     def validate(self, attrs):
+        self.__validate_miner_address(attrs)
         self.__validate_transaction(attrs)
         leaf = attrs['proof']['leaf']
         tx_id = attrs['tx_id']
