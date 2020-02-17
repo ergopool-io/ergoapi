@@ -22,7 +22,6 @@
       "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5"
     }
   ],
-  "transaction": {
     "transaction": {
       "id": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7",
       "outputs": [
@@ -40,5 +39,4 @@
         }
       ]
     }
-  }
 }

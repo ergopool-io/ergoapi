@@ -250,7 +250,7 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
                                     share.get('nonce'),
                                     share.get('d'),
                                     data['proof']['msg'],
-                                    data['transaction']['tx_id'],
+                                    data['transaction']['id'],
                                     data['proof']['block'],
                                     data['addresses'],
                                     client_ip)
