@@ -804,6 +804,7 @@ class ValidationSerializer(serializers.Serializer):
             tx_id = data_node['response']
 
         transaction_ok = False
+        check_block = False
         if data_node['status'] == 'External Error':
             node_result = data_node['response']
             required_msg_custom = 'Scripts of all transaction inputs should pass verification'
@@ -815,12 +816,14 @@ class ValidationSerializer(serializers.Serializer):
                                                                                'transaction': transaction})
                 if res.status_code == status.HTTP_200_OK:
                     result = res.json()
+                    check_block = result['verified'] is None
                     if result['success'] and result['verified']:
                         # has been verified with custom context
                         logger.info('provided transaction was verified with custom verifier')
                         transaction_ok = True
 
-            elif 'detail' in node_result and required_msg_mined in node_result['detail']:
+            if (not transaction_ok) and (('detail' in node_result and required_msg_mined in node_result['detail'])
+                                         or check_block):
                 reader = Reader(decode(msg_pre_image, 'hex'))
                 header = HeaderSerializer.parse_without_pow(reader)
 
