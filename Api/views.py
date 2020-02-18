@@ -268,7 +268,10 @@ class DefaultView(APIView):
         method = getattr(requests, method_name)
         response = method(urljoin(ACCOUNTING, url + '/'), data=request.data,
                           headers=headers, params=dict(request.query_params))
-        result = modify_pagination(request, response.json())
+        try:
+            result = modify_pagination(request, response.json())
+        except:
+            result = response.content
         return Response(result, status=response.status_code)
 
     def get(self, request, url=None):
