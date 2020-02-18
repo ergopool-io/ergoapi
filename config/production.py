@@ -20,7 +20,8 @@ DATABASES = {
 NODE_ADDRESS = "http://%s:%s/" % (os.environ.get("NODE_HOST"), os.environ.get("NODE_PORT", "9052"))
 
 # Explorer ergo (ex: https://api.ergoplatform.com/)
-ERGO_EXPLORER_ADDRESS = "https://%s/" % (os.environ.get("ERGO_EXPLORER_ADDRESS"))
+ERGO_EXPLORER_ADDRESS = "https://%s/" % (os.environ.get("ERGO_EXPLORER_ADDRESS",
+                                                        'api-testnet.ergoplatform.com'))
 
 # Custom verifier address
 VERIFIER_ADDRESS = "http://%s:%s/" % (os.environ.get("VERIFIER_HOST"), os.environ.get("VERIFIER_PORT", "9001"))

@@ -171,7 +171,7 @@ class ValidateShare(General, celery.Task):
                         "share": share.get("share"),
                         "status": share.get("status"),
                         "difficulty": share.get("difficulty"),
-                        "transaction_id": share.get("tx_id"),
+                        "transaction_id": share.get("transaction_id"),
                         "block_height": share.get("block").get('height'),
                         "parent_id": share.get("block").get('parent'),
                         "next_ids": share.get("block").get('next'),
