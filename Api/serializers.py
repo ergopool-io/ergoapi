@@ -800,7 +800,9 @@ class ValidationSerializer(serializers.Serializer):
         # Send request to node for validate transaction
         tx_id = None
         data_node = General.node_request('transactions/check', data=transaction, request_type="post")
+        node_ok = False
         if data_node['status'] == 'success':
+            node_ok = True
             tx_id = data_node['response']
 
         transaction_ok = False
@@ -848,7 +850,7 @@ class ValidationSerializer(serializers.Serializer):
                     logger.info('solved share accepted even though its input boxes was not ok!')
                     transaction_ok = True
 
-        if data_node['status'] == 'External Error' and not transaction_ok:
+        if not node_ok and not transaction_ok:
             logger.error('Node failed to validate transaction')
             raise ValidationError({"message": data_node['response']})
 
