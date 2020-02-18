@@ -5,11 +5,11 @@ from rest_framework import serializers, status
 from rest_framework.exceptions import ValidationError
 from Api.models import Configuration, Block
 from Api.utils.general import General
-from Api.utils.header import Reader, HeaderSerializer
+from Api.utils.header import Reader, HeaderSerializer, HeaderWithoutPow, Writer
 from ErgoApi.settings import API_KEY, ACCOUNTING_URL, ERGO_EXPLORER_ADDRESS, VERIFIER_ADDRESS
 
 from django.utils.deconstruct import deconstructible
-from codecs import decode
+from codecs import decode, encode
 from ecpy.curves import Curve
 import struct
 import logging
@@ -834,13 +834,15 @@ class ValidationSerializer(serializers.Serializer):
                 logger.info('chain slice returned {}'.format(data_node))
 
                 if data_node['status'] == 'success' and len(data_node['response']) == 1:
-                    pow_solutions = data_node['response'][0]['powSolutions']
-                    expected = [pow_solutions['pk'], pow_solutions['n'], pow_solutions['w'], pow_solutions['d']]
-                    share = attrs['share']
-                    cur = [attrs['pk'], share['nonce'], share['w'], share['d']]
+                    header = data_node['response'][0]
+                    header['extensionRoot'] = header['extensionHash']
+                    header = HeaderWithoutPow.create_from_json(header)
+                    writer = Writer()
+                    HeaderSerializer.serialize_without_pow(header, writer)
+                    msg = encode(writer.get_bytes(), 'hex').decode('utf-8')
 
-                    if expected != cur:
-                        logger.warning('solved share was not confirmed as a valid one!')
+                    if msg != msg_pre_image:
+                        logger.warning('solved share was not confirmed as a valid one, msg_pre_image does not match!')
                         raise ValidationError({"message": 'Invalid solved share!'})
 
                     logger.info('solved share accepted even though its input boxes was not ok!')
