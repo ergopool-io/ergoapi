@@ -28,6 +28,21 @@ class HeaderWithoutPow:
         self.height = height
         self.votes = votes
 
+    @staticmethod
+    def create_from_json(header):
+        version = header['version']
+        parentId = header['parentId']
+        ADProofsRoot = header['adProofsRoot']
+        transactionsRoot = header['transactionsRoot']
+        stateRoot = header['stateRoot']
+        timestamp = header['timestamp']
+        extensionRoot = header['extensionRoot']
+        nBits = header['nBits']
+        height = header['height']
+        votes = header['votes']
+        return HeaderWithoutPow(version, parentId, ADProofsRoot, transactionsRoot,
+                                stateRoot, timestamp, extensionRoot, nBits, height, votes)
+
     @property
     def decode_nbits(self):
         """
