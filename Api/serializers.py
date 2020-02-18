@@ -731,7 +731,7 @@ class ValidateProofSerializer(serializers.Serializer):
         if header.height <= height - Configuration.objects.THRESHOLD_HEIGHT:
             logger.info('Proof is invalid (height) for transaction id {}'.format(leaf))
             raise ValidationError({'message': 'The proof is invalid.', 'status': 'invalid'})
-        if header.decode_nbits > max(int(last_header.get('response')[0].get('difficulty')), int(difficulty)):
+        if header.decode_nbits < max(int(last_header.get('response')[0].get('difficulty')), int(difficulty)):
             logger.info('Proof is invalid (difficulty) for transaction id {}'.format(leaf))
             raise ValidationError({'message': 'The proof is invalid.', 'status': 'invalid'})
         # Generate path
