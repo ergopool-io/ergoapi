@@ -1590,7 +1590,7 @@ class TestProofValidate(TransactionTestCase):
                 "status": "success",
                 "response": {
                     "headersHeight": 40670,
-                    "difficulty": 389567634401280
+                    "difficulty": 5942804479
                 }
             }
         elif args[0] == "/blocks/lastHeaders/1":
@@ -1598,7 +1598,7 @@ class TestProofValidate(TransactionTestCase):
                 "status": "success",
                 "response": [{
                     "headersHeight": 40670,
-                    "difficulty": 489467634401280,
+                    "difficulty": 5942804479,
                     "timestamp": 1574114138065
                 }]
             }
@@ -1763,7 +1763,7 @@ class TestValidation(TransactionTestCase):
                 "status": "success",
                 "response": {
                     "headersHeight": 40670,
-                    "difficulty": 389567634401280
+                    "difficulty": 3888644095
                 }
             }
         elif args[0] == "/blocks/lastHeaders/1":
@@ -1771,7 +1771,7 @@ class TestValidation(TransactionTestCase):
                 "status": "success",
                 "response": [{
                     "headersHeight": 40670,
-                    "difficulty": 489467634401280,
+                    "difficulty": 3888644095,
                     "timestamp": 1574114138065
                 }]
             }
@@ -1825,7 +1825,7 @@ class TestValidation(TransactionTestCase):
                 "status": "success",
                 "response": {
                     "headersHeight": 40670,
-                    "difficulty": 389567634401280
+                    "difficulty": 3888644095
                 }
             }
         elif args[0] == "/blocks/lastHeaders/1":
@@ -1833,7 +1833,7 @@ class TestValidation(TransactionTestCase):
                 "status": "success",
                 "response": [{
                     "headersHeight": 40670,
-                    "difficulty": 489467634401280,
+                    "difficulty": 3888644095,
                     "timestamp": 1574114138065
                 }]
             }
