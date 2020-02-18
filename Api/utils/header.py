@@ -56,7 +56,10 @@ class HeaderWithoutPow:
         bytes_arr = b''.join(bytes_[:4])
         length = int.from_bytes(bytes_arr, 'big')
         buf = [b'\x00'] * length
-        buf[:3] = bytes_[4:]
+        i = 0
+        while i < length:
+            buf[i] = bytes_[4+i]
+            i += 1
         if not len(buf):
             return 0
         else:
