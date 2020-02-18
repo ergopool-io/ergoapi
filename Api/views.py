@@ -241,7 +241,7 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         # Get ip of the client that send request
-        client_ip = request.META.get('REMOTE_ADDR')
+        client_ip = request.META.get('HTTP_X_REAL_IP')
 
         logger.debug("Tasks run for validate shares")
         for share in data.get('shares', []):
