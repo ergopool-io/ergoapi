@@ -47,8 +47,8 @@ class ValidateShare(General, celery.Task):
     def __init__(self):
         self._base_factor = None
 
-    def run(self, pk, w, nonce, d, msg, tx_id, block, client_ip, *args, **kwargs):
-        self.validate(pk, w, nonce, d, msg, tx_id, block, client_ip)
+    def run(self, pk, w, nonce, d, msg, tx_id, block, addresses, client_ip, *args, **kwargs):
+        self.validate(pk, w, nonce, d, msg, tx_id, block, addresses, client_ip)
 
     def __get_base(self, difficulty):
         """
@@ -160,7 +160,8 @@ class ValidateShare(General, celery.Task):
     def save_share(self, share):
         """
         Function for send share to Accounting service
-        :param share: A json consist of miner, status, share, difficulty, tx_id, headers_height
+        :param share: A json consist of miner, status, share, difficulty,
+         tx_id, headers_height, block, addresses, client_ip
         :return: status request to accounting
         """
         try:
@@ -170,11 +171,14 @@ class ValidateShare(General, celery.Task):
                         "share": share.get("share"),
                         "status": share.get("status"),
                         "difficulty": share.get("difficulty"),
-                        "transaction_id": share.get("tx_id"),
-                        "block_height": share.get("headers_height"),
+                        "transaction_id": share.get("transaction_id"),
+                        "block_height": share.get("block").get('height'),
                         "parent_id": share.get("block").get('parent'),
                         "next_ids": share.get("block").get('next'),
                         "path": share.get("block").get("path"),
+                        "miner_address": share.get("addresses").get("miner"),
+                        "lock_address": share.get("addresses").get("lock"),
+                        "withdraw_address": share.get("addresses").get("withdraw"),
                         "client_ip": share.get("client_ip")
                         })
             logger.debug(response)
@@ -186,7 +190,7 @@ class ValidateShare(General, celery.Task):
             }
             return response
 
-    def validate(self, pk, w, n, d, msg, tx_id, block, client_ip):
+    def validate(self, pk, w, n, d, msg, tx_id, block, addresses, client_ip):
         """
         Checks that `header` contains correct solution of the Autolykos PoW puzzle.
         :param pk: miner public key.
@@ -197,6 +201,8 @@ class ValidateShare(General, celery.Task):
         :param msg: Hash of meg_pre_image (header of block without pow)
         :param tx_id: Transaction Id
         :param block: consist parent_id and next_ids candidate block and path
+        :param addresses: address miner
+        :param client_ip: ip of client that send request
         :return:
         """
         # Create response for share
@@ -210,9 +216,8 @@ class ValidateShare(General, celery.Task):
         try:
             # Generate uniq id for share
             share_id = self.blake((msg + n + pk + w).encode('utf-8'), 'hex')
-            # Request to node for get headersHeight
+            # Request to node for get difficulty
             data_node = self.node_request('info', {'accept': 'application/json'})
-            height = data_node.get('response').get('headersHeight')
             difficulty = data_node.get('response').get('difficulty')
             share['difficulty'] = int(difficulty / self.base_factor)
             share['share'] = share_id
@@ -242,12 +247,16 @@ class ValidateShare(General, celery.Task):
             logger.info('Share status with pk {}: {}'.format(pk, share['status']))
             if share['status'] == 'solved':
                 share.update({
-                    'headers_height': height,
                     'transaction_id': tx_id,
-                    'block': block
+                    'block': block,
+                    'addresses': addresses
                 })
             elif share['status'] == 'valid':
-                share.update({'block': block})
+                block.pop('height', None)
+                share.update({
+                    'block': block,
+                    'addresses': addresses
+                              })
         except ValidationError as e:
             share['status'] = e.args[0]['status']
 
