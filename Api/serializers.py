@@ -1,18 +1,15 @@
+import logging
+from codecs import decode, encode
 from urllib.parse import urljoin
 
 import requests
+from django.utils.deconstruct import deconstructible
 from rest_framework import serializers, status
 from rest_framework.exceptions import ValidationError
-from Api.models import Configuration, Block
-from Api.utils.general import General
-from Api.utils.header import Reader, HeaderSerializer, HeaderWithoutPow, Writer
-from ErgoApi.settings import API_KEY, ACCOUNTING_URL, ERGO_EXPLORER_ADDRESS, VERIFIER_ADDRESS
 
-from django.utils.deconstruct import deconstructible
-from codecs import decode, encode
-from ecpy.curves import Curve
-import struct
-import logging
+from Api.utils.general import General, LazyConfiguration
+from Api.utils.header import Reader, HeaderSerializer, HeaderWithoutPow, Writer
+from ErgoApi.settings import API_KEY, ERGO_EXPLORER_ADDRESS, VERIFIER_ADDRESS
 
 logger = logging.getLogger(__name__)
 
@@ -34,42 +31,18 @@ class HexValidator:
             raise ValidationError('Type of input is invalid')
 
 
-class ConfigurationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Configuration
-        fields = ['key', 'value']
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.accounting_choices = set()
-
-        # here we update the choices by appending the choices of accounting
-        curr_choices = dict(self.fields['key'].grouped_choices)
-
-        try:
-            res = requests.options(urljoin(ACCOUNTING_URL, 'conf/'))
-
-        except requests.exceptions.RequestException:
-            logger.critical('Could not connect to accounting!')
-            return
-
-        if res.status_code != status.HTTP_200_OK:
-            return
-
-        res = res.json()
-        for choice in res['actions']['POST']['key']['choices']:
-            curr_choices[choice['value']] = choice['display_name']
-            self.accounting_choices.add(choice['value'])
-
-        curr_choices = {(key, value) for key, value in curr_choices.items()}
-        self.fields['key'].grouped_choices = curr_choices
-        self.fields['key'].choices = curr_choices
-
-
 class ConfigurationValueSerializer(serializers.Serializer):
     reward = serializers.IntegerField()
     wallet_address = serializers.CharField()
     pool_difficulty_factor = serializers.FloatField()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(args, kwargs)
+
+        request = self.context.get('request')
+        self.configs = LazyConfiguration()
+        if request is not None and request.configs is not None:
+            self.configs = request.configs
 
     class Meta:
         fields = ['reward', 'wallet_address', 'pool_difficulty_factor']
@@ -87,6 +60,14 @@ class ValidateTransactionSerializer(serializers.Serializer, General):
     status = serializers.CharField(required=False, read_only=True)
     message = serializers.CharField(required=False, read_only=True)
     tx_id = serializers.CharField(required=False, read_only=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(args, kwargs)
+
+        request = self.context.get('request')
+        self.configs = LazyConfiguration()
+        if request is not None and request.configs is not None:
+            self.configs = request.configs
 
     def __validate_transaction(self, transaction):
         # Send request to node for validate transaction
@@ -153,9 +134,9 @@ class ValidateTransactionSerializer(serializers.Serializer, General):
             # Calculate value of payed in transaction
             value = self.__value_of_transaction(wallet_address, transaction)
             # Sum value of output field should be bigger than reward policy pool.
-            REWARD_FACTOR = Configuration.objects.REWARD_FACTOR
-            PRECISION = Configuration.objects.REWARD_FACTOR_PRECISION
-            TOTAL_REWARD = round((Configuration.objects.TOTAL_REWARD / 1e9) * REWARD_FACTOR, PRECISION)
+            REWARD_FACTOR = self.configs.REWARD_FACTOR
+            PRECISION = self.configs.REWARD_FACTOR_PRECISION
+            TOTAL_REWARD = round((self.configs.TOTAL_REWARD / 1e9) * REWARD_FACTOR, PRECISION)
             TOTAL_REWARD = int(TOTAL_REWARD * 1e9)
 
             if value >= TOTAL_REWARD:
@@ -188,6 +169,14 @@ class ValidateProofSerializer(serializers.Serializer):
     msg = serializers.CharField(required=False, read_only=True)
     message = serializers.CharField(required=False, read_only=True)
     status = serializers.CharField(required=False, read_only=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(args, kwargs)
+
+        request = self.context.get('request')
+        self.configs = LazyConfiguration()
+        if request is not None and request.configs is not None:
+            self.configs = request.configs
 
     def __merkle_proof(self, leaf, levels_encoded):
         """
@@ -231,7 +220,7 @@ class ValidateProofSerializer(serializers.Serializer):
         :return:
         """
         block_chain = General.node_request('/blocks/chainSlice?fromHeight=%s&toHeight=%s' %
-                                           (str(height - Configuration.objects.THRESHOLD_HEIGHT), str(height)),
+                                           (str(height - self.configs.THRESHOLD_HEIGHT), str(height)),
                                            {'accept': 'application/json'})
         parent_id = header.parentId.hex()
         path = list()
@@ -244,7 +233,7 @@ class ValidateProofSerializer(serializers.Serializer):
         try:
             path_second = list()
             url = urljoin(ERGO_EXPLORER_ADDRESS, 'stats/forks')
-            query = {'fromHeight': height - Configuration.objects.THRESHOLD_HEIGHT}
+            query = {'fromHeight': height - self.configs.THRESHOLD_HEIGHT}
             response = requests.get(url, query)
             block_chain = response.json()
             for fork in block_chain.get('forks')[::-1]:
@@ -289,10 +278,10 @@ class ValidateProofSerializer(serializers.Serializer):
         # Validate timestamp after that validate height and after that validate difficulty and after that generate path
         # from last header - THRESHOLD_HEIGHT to the height of header that works on that.
         if header.timestamp < last_header.get('response')[0].get(
-                'timestamp') - Configuration.objects.THRESHOLD_TIMESTAMP:
+                'timestamp') - self.configs.THRESHOLD_TIMESTAMP:
             logger.info('Proof is invalid (timestamp) for transaction id {}'.format(leaf))
             raise ValidationError({'message': 'The proof is invalid.', 'status': 'invalid'})
-        if header.height <= height - Configuration.objects.THRESHOLD_HEIGHT:
+        if header.height <= height - self.configs.THRESHOLD_HEIGHT:
             logger.info('Proof is invalid (height) for transaction id {}'.format(leaf))
             raise ValidationError({'message': 'The proof is invalid.', 'status': 'invalid'})
         if header.decode_nbits < max(int(last_header.get('response')[0].get('difficulty')), int(difficulty)):
@@ -334,6 +323,14 @@ class ValidationShareSerializer(serializers.Serializer, General):
     nonce = serializers.CharField()
     d = serializers.CharField()
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(args, kwargs)
+
+        request = self.context.get('request')
+        self.configs = LazyConfiguration()
+        if request is not None and request.configs is not None:
+            self.configs = request.configs
+
     def validate_d(self, value):
         try:
             return int(value)
@@ -357,6 +354,14 @@ class AddressesSerializer(serializers.Serializer):
     lock = serializers.CharField()
     withdraw = serializers.CharField()
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(args, kwargs)
+
+        request = self.context.get('request')
+        self.configs = LazyConfiguration()
+        if request is not None and request.configs is not None:
+            self.configs = request.configs
+
     def update(self, instance, validated_data):
         pass
 
@@ -373,6 +378,14 @@ class ValidationSerializer(serializers.Serializer):
     transaction = serializers.JSONField()
     proof = ValidateProofSerializer(many=False)
     shares = ValidationShareSerializer(many=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        request = self.context.get('request')
+        self.configs = LazyConfiguration()
+        if request is not None and request.configs is not None:
+            self.configs = request.configs
 
     def __validate_transaction_node(self, attrs):
         transaction = attrs['transaction']
@@ -494,9 +507,9 @@ class ValidationSerializer(serializers.Serializer):
             # Calculate value of payed in transaction
             value = self.__value_of_transaction(wallet_address, transaction)
             # Sum value of output field should be bigger than reward policy pool.
-            REWARD_FACTOR = Configuration.objects.REWARD_FACTOR
-            PRECISION = Configuration.objects.REWARD_FACTOR_PRECISION
-            TOTAL_REWARD = round((Configuration.objects.TOTAL_REWARD / 1e9) * REWARD_FACTOR, PRECISION)
+            REWARD_FACTOR = self.configs.REWARD_FACTOR
+            PRECISION = self.configs.REWARD_FACTOR_PRECISION
+            TOTAL_REWARD = round((self.configs.TOTAL_REWARD / 1e9) * REWARD_FACTOR, PRECISION)
             TOTAL_REWARD = int(TOTAL_REWARD * 1e9)
 
             if value >= TOTAL_REWARD:
