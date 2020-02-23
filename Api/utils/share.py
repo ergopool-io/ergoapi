@@ -1,16 +1,16 @@
-from rest_framework.exceptions import ValidationError
-from Api.models import Configuration, Block
-from Api.utils.general import General
-
-from django.conf import settings
-from urllib.parse import urljoin
-from codecs import decode
-from ecpy.curves import Curve
-import requests
-import struct
 import logging
+import struct
 import time
+from codecs import decode
+from urllib.parse import urljoin
+
 import celery
+import requests
+from django.conf import settings
+from ecpy.curves import Curve
+from rest_framework.exceptions import ValidationError
+
+from Api.utils.general import General, LazyConfiguration
 
 NUMBER_OF_LOG = getattr(settings, "NUMBER_OF_LOG")
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL")
@@ -41,13 +41,18 @@ class ValidateShare(General, celery.Task):
     @property
     def base_factor(self):
         if not self._base_factor:
-            self._base_factor = Configuration.objects.POOL_BASE_FACTOR
+            if not self.POOL_BASE_FACTOR:
+                self.POOL_BASE_FACTOR = LazyConfiguration().POOL_BASE_FACTOR
+
+            self._base_factor = self.POOL_BASE_FACTOR
         return self._base_factor
 
     def __init__(self):
         self._base_factor = None
+        self.POOL_BASE_FACTOR = None
 
-    def run(self, pk, w, nonce, d, msg, tx_id, block, addresses, client_ip, *args, **kwargs):
+    def run(self, pk, w, nonce, d, msg, tx_id, block, addresses, client_ip, pool_base_factor, *args, **kwargs):
+        self.POOL_BASE_FACTOR = pool_base_factor
         self.validate(pk, w, nonce, d, msg, tx_id, block, addresses, client_ip)
 
     def __get_base(self, difficulty):
