@@ -1,10 +1,11 @@
+import json
+import logging
+from hashlib import blake2b
 from urllib.parse import urljoin, urlparse, urlunparse
 
-from ErgoApi.settings import NODE_ADDRESS, API_KEY
-from hashlib import blake2b
 import requests
-import logging
-import json
+
+from ErgoApi.settings import NODE_ADDRESS, API_KEY, ACCOUNTING_URL
 
 logger = logging.getLogger(__name__)
 
@@ -80,3 +81,23 @@ def modify_pagination(request, result):
             pagination[2] = url_parts[2]
             result['previous'] = urlunparse(pagination)
     return result
+
+
+class LazyConfiguration:
+    def __init__(self):
+        self.configs = None
+
+    def get_configuration(self):
+        if self.configs is None:
+            res = requests.get(urljoin(ACCOUNTING_URL, 'conf/'))
+            self.configs = res.json()
+
+    def __getattr__(self, item):
+        if self.configs is None:
+            self.get_configuration()
+
+        if item not in self.configs.keys():
+            return super().__getattribute__(item)
+
+        return self.configs[item]
+
