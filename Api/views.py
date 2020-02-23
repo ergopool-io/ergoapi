@@ -1,99 +1,20 @@
-import os
-from pydoc import locate
+import logging
+from urllib.parse import urljoin
 
 import requests
 from django.conf import settings
-from django.shortcuts import render
-from django.views import View
 from rest_framework import viewsets, mixins, status
 from rest_framework.response import Response
-from rest_framework import filters
-from rest_framework.authentication import SessionAuthentication, TokenAuthentication
-from rest_framework.permissions import IsAuthenticated
-import logging
-from urllib.parse import urljoin, urlencode, urlparse, parse_qsl, urlunparse
 from rest_framework.views import APIView
 
 from Api import serializers
-from Api.models import Block, Configuration, CONFIGURATION_DEFAULT_KEY_VALUE, CONFIGURATION_KEY_CHOICE, \
-    CONFIGURATION_KEY_TO_TYPE
-from Api.utils.general import General, modify_pagination
 from Api.tasks import ValidateShareTask
+from Api.utils.general import General, modify_pagination
 
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL")
 ACCOUNTING_HOST = getattr(settings, "ACCOUNTING_HOST")
 
 logger = logging.getLogger(__name__)
-
-
-class ConfigurationViewSet(viewsets.GenericViewSet,
-                           mixins.CreateModelMixin,
-                           mixins.ListModelMixin):
-    # For session authentication
-    authentication_classes = [SessionAuthentication, TokenAuthentication]
-    # For token authentication
-    permission_classes = (IsAuthenticated,)
-    serializer_class = serializers.ConfigurationSerializer
-    queryset = Configuration.objects.all()
-    filter_backends = (filters.SearchFilter,)
-    search_fields = ('key', 'value',)
-
-    def perform_create(self, serializer, *args, **kwargs):
-        """
-        we override the perform_create to create a new configuration
-        or update an existing configuration.
-        :param serializer:
-        :param args:
-        :param kwargs:
-        :return:
-        """
-        key = serializer.validated_data['key']
-        value = serializer.validated_data['value']
-        if key in [x[0] for x in CONFIGURATION_KEY_CHOICE]:
-            val_type = CONFIGURATION_KEY_TO_TYPE[key]
-            try:
-                locate(val_type)(value)
-
-            except:
-                return
-
-            configurations = Configuration.objects.filter(key=key)
-            if not configurations:
-                serializer.save()
-            else:
-                configuration = Configuration.objects.get(key=key)
-                configuration.value = value
-                configuration.save()
-
-        try:
-            if key in serializer.accounting_choices:
-                requests.post(urljoin(ACCOUNTING, 'conf/'), data={'key': key, 'value': value})
-
-        except requests.exceptions.RequestException:
-            logger.critical('Could not connect to accounting!')
-
-    def list(self, request, *args, **kwargs):
-        """
-        overrides list method to return list of key: value instead of list of dicts
-        """
-        configs = dict(CONFIGURATION_DEFAULT_KEY_VALUE)
-        for conf in Configuration.objects.all():
-            val_type = CONFIGURATION_KEY_TO_TYPE[conf.key]
-            configs[conf.key] = locate(val_type)(conf.value)
-
-        res = None
-        try:
-            res = requests.get(urljoin(ACCOUNTING, 'conf/'))
-
-        except requests.exceptions.RequestException:
-            logger.critical('Could not connect to accounting!')
-
-        if res and res.status_code == status.HTTP_200_OK:
-            res = res.json()
-            for key, value in res.items():
-                configs[key] = value
-
-        return Response(configs, status=status.HTTP_200_OK)
 
 
 class ConfigurationValueViewSet(viewsets.GenericViewSet,
@@ -109,26 +30,20 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet,
         return None
 
     def list(self, request, *args, **kwargs):
-        return Response(self.get_response())
+        return Response(self.get_response(request.configs))
 
     def retrieve(self, request, *args, **kwargs):
-        return Response(self.get_response(kwargs.get("pk").lower()))
+        return Response(self.get_response(request.configs, pk=kwargs.get("pk").lower()))
 
     @staticmethod
-    def get_response(pk=None):
+    def get_response(configs, pk=None):
         """
         get configuration for json.
         :param pk: if this parameter set return list miner specific configuration otherwise return general configuration
         :return: a json contain all configuration
         """
-        result = dict(CONFIGURATION_DEFAULT_KEY_VALUE)
-        config = Configuration.objects.all()
-        for x in config.values_list('key', flat=True):
-            val_type = CONFIGURATION_KEY_TO_TYPE[x]
-            result[x] = locate(val_type)(config.get(key=x).value)
-
-        PRECISION = Configuration.objects.REWARD_FACTOR_PRECISION
-        REWARD = round((result['TOTAL_REWARD'] / 1e9) * result['REWARD_FACTOR'], PRECISION)
+        PRECISION = configs.REWARD_FACTOR_PRECISION
+        REWARD = round((configs.TOTAL_REWARD / 1e9) * configs.REWARD_FACTOR, PRECISION)
         REWARD = int(REWARD * 1e9)
         data_node = General.node_request('wallet/addresses',
                                          {'accept': 'application/json', 'api_key': settings.API_KEY})
@@ -139,8 +54,8 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet,
         return {
             'reward': REWARD,
             'wallet_address': wallet_address,
-            'pool_base_factor': result['POOL_BASE_FACTOR'],
-            'max_chunk_size': result['SHARE_CHUNK_SIZE'],
+            'pool_base_factor': configs.POOL_BASE_FACTOR,
+            'max_chunk_size': configs.SHARE_CHUNK_SIZE,
         }
 
 
@@ -148,8 +63,9 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
     serializer_class = serializers.ValidationSerializer
 
     def create(self, request, *args, **kwargs):
+        configs = request.configs
         data = request.data
-        if len(data.get('shares', [])) > Configuration.objects.SHARE_CHUNK_SIZE:
+        if len(data.get('shares', [])) > configs.SHARE_CHUNK_SIZE:
             return Response({
                 "status": "error",
                 "message": "too big chunk"
@@ -170,7 +86,8 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
                                     data['transaction']['id'],
                                     data['proof']['block'],
                                     data['addresses'],
-                                    client_ip)
+                                    client_ip,
+                                    configs.POOL_BASE_FACTOR)
         return Response({'status': 'OK'}, status=status.HTTP_200_OK)
 
 
@@ -197,7 +114,7 @@ class DefaultView(APIView):
     def post(self, request, url=None):
         return self.send_request(request, url, 'post')
 
-    def options(self, request, url=None):
+    def options(self, request, url=None, **kwargs):
         return self.send_request(request, url, 'options')
 
     def delete(self, request, url=None):
