@@ -83,3 +83,6 @@ NUMBER_OF_LOG = 100
 
 # set your approprate broker url, e.g, rabbitmq or redis
 CELERY_BROKER_URL = 'amqp://guest:guest@localhost:5672//'
+
+# shares chunk size
+SHARE_CHUNK_SIZE = 10
