@@ -3,7 +3,10 @@ import struct
 from codecs import decode
 from unittest.mock import patch, call
 from urllib.parse import urljoin
-
+import json
+from ErgoApi import settings
+from django.contrib.auth.models import User
+from django.test.client import RequestFactory
 from django.test.testcases import TransactionTestCase, TestCase
 from rest_framework.exceptions import ValidationError
 
@@ -112,13 +115,12 @@ class ConfigurationValueApiTest(TransactionTestCase):
         configs['TOTAL_REWARD'] = int(40e9)
         configs['REWARD_FACTOR'] = 1
         configs['POOL_BASE_FACTOR'] = 1
-        configs['SHARE_CHUNK_SIZE'] = 20
         # response of API /config/value should be this
         result = {
             "reward": int(40e9),
             "wallet_address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM",
             "pool_base_factor": 1,
-            "max_chunk_size": 20,
+            "max_chunk_size": settings.SHARE_CHUNK_SIZE,
         }
 
         # send a http 'get' request to the configuration endpoint
@@ -1068,6 +1070,11 @@ class TestValidation(TransactionTestCase):
         # Get data input
         with open("Api/data_testing/data_input_validation_invalid_chunk.json", "r") as read_file:
             data_input = json.load(read_file)
+        res_shares = []
+        rep_share = json.dumps(data_input['shares'][0])
+        for i in range(settings.SHARE_CHUNK_SIZE - 1):
+            res_shares.append(json.loads(rep_share))
+        data_input['shares'] += res_shares
         # response of API /api/validation/ should be this
         result = {
             "status": "error",

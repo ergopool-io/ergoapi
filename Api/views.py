@@ -13,6 +13,8 @@ from Api.utils.general import General, modify_pagination
 
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL")
 ACCOUNTING_HOST = getattr(settings, "ACCOUNTING_HOST")
+SHARE_CHUNK_SIZE = getattr(settings, "SHARE_CHUNK_SIZE", 10)
+
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +67,7 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
     def create(self, request, *args, **kwargs):
         configs = request.configs
         data = request.data
-        if len(data.get('shares', [])) > configs.SHARE_CHUNK_SIZE:
+        if len(data.get('shares', [])) > SHARE_CHUNK_SIZE:
             return Response({
                 "status": "error",
                 "message": "too big chunk"
