@@ -57,7 +57,7 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet,
             'reward': REWARD,
             'wallet_address': wallet_address,
             'pool_base_factor': configs.POOL_BASE_FACTOR,
-            'max_chunk_size': configs.SHARE_CHUNK_SIZE,
+            'max_chunk_size': SHARE_CHUNK_SIZE,
         }
 
 
