@@ -251,10 +251,13 @@ class ValidateShare(General, celery.Task):
                 share['status'] = 'invalid'
             logger.info('Share status with pk {}: {}'.format(pk, share['status']))
             if share['status'] == 'solved':
+                # pow identity
+                pow_identity = self.blake((w + n + str(d)).encode('utf-8'), 'hex')
                 share.update({
                     'transaction_id': tx_id,
                     'block': block,
-                    'addresses': addresses
+                    'addresses': addresses,
+                    'pow_identity': pow_identity
                 })
             elif share['status'] == 'valid':
                 block.pop('height', None)

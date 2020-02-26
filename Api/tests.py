@@ -1,4 +1,5 @@
 import json
+from hashlib import blake2b
 import struct
 from codecs import decode
 from unittest.mock import patch, call
@@ -229,6 +230,9 @@ class TestValidateShare(TransactionTestCase):
         configs = dict(TestProofValidate.default_configs)
         TestProofValidate.returned_configs = configs
 
+        to_hash = share['w'] + share['nonce'] + str(share['d'])
+        pow_identity = blake2b(to_hash.encode('utf-8'), digest_size=32).hexdigest()
+
         block = ValidateShare()
         block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'],
                        share['block'], share['addresses'], share['client_ip'])
@@ -236,6 +240,7 @@ class TestValidateShare(TransactionTestCase):
             'miner': '03cd07843e1f7e25407eda2369ad644854e532e381ab30d6488970e0b87d060d16',
             'share': 'a8794c0719bbe03afe6ff4926d56d59aeb3c2438d7396b7c4c4fd5aa064288df',
             'status': 'solved',
+            "pow_identity": pow_identity,
             'difficulty': 1,
             'transaction_id': '53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5',
             'block': {
