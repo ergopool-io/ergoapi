@@ -407,7 +407,7 @@ class ValidationSerializer(serializers.Serializer):
             required_msg_custom = 'Scripts of all transaction inputs should pass verification'
             required_msg_mined = 'Every input of the transaction should be in UTXO'
             if 'detail' in node_result and required_msg_custom in node_result['detail']:
-                miner_pk = pk
+                miner_pk = attrs['addresses']['miner']
                 # there is a chance that custom verifier verifies this transaction
                 res = requests.post(urljoin(VERIFIER_ADDRESS, 'verify'), json={'minerPk': miner_pk,
                                                                                'transaction': transaction})
