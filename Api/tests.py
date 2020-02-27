@@ -5,6 +5,7 @@ from hashlib import blake2b
 from unittest.mock import patch, call
 from urllib.parse import urljoin
 
+from django.test import Client
 from django.test.testcases import TransactionTestCase, TestCase
 from rest_framework.exceptions import ValidationError
 
@@ -61,8 +62,6 @@ class ConfigurationValueApiTest(TransactionTestCase):
 
         if url == urljoin(ACCOUNTING_URL, 'conf/'):
             return MockResponse(ConfigurationValueApiTest.returned_configs, 200)
-
-        return None
 
     @patch("requests.get", side_effect=mocked_requests_get)
     @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
@@ -129,6 +128,40 @@ class ConfigurationValueApiTest(TransactionTestCase):
         # check the content of the response
         self.assertEqual(response.json(), result)
 
+    @patch("requests.get", side_effect=mocked_requests_get)
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_configuration_api_get_method_pk(self, mock, mock2):
+        """
+        In this scenario we want to test the functionality of Configuration API when
+        it is called by a http 'get' method with custom pk.
+        For the above purpose first we create some configurations in the database and then
+        we send a http 'get' method to retrieve a list of them.
+        We expect that the status code of response be '200 ok' and
+        the json format of response be as below .
+        :return:
+        """
+        # Create Objects configuration in database
+        configs = dict(ConfigurationValueApiTest.default_configs)
+        configs['TOTAL_REWARD'] = int(40e9)
+        configs['REWARD_FACTOR'] = 1
+        configs['POOL_BASE_FACTOR'] = 1
+        # response of API /config/value should be this
+        result = {
+            "reward": int(40e9),
+            "wallet_address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM",
+            "pool_base_factor": 1,
+            "max_chunk_size": settings.SHARE_CHUNK_SIZE,
+        }
+
+        # send a http 'get' request to the configuration endpoint
+        ConfigurationValueApiTest.returned_configs = configs
+        pk = "thisisatestpk"
+        response = self.client.get('/api/config/value/' + pk + "/")
+        # check the status of the response
+        self.assertEqual(response.status_code, 200)
+        # check the content of the response
+        self.assertEqual(response.json(), result)
+
 
 class TestValidateShare(TransactionTestCase):
     reset_sequences = True
@@ -161,8 +194,6 @@ class TestValidateShare(TransactionTestCase):
 
         if url == urljoin(ACCOUNTING_URL, 'conf/'):
             return MockResponse(TestProofValidate.returned_configs, 200)
-
-        return None
 
     def mocked_node_request(*args, **kwargs):
         """
@@ -521,23 +552,6 @@ class TestProofValidate(TransactionTestCase):
                     "timestamp": 1574114138065
                 }]
             }
-        elif "/blocks/chainSlice?fromHeight" in args[0]:
-            return {
-                "status": "success",
-                "response": [{
-                    "id": "e845c88d5044b0f427ac15a444b172e4eb7b3c13ce321a33bc49b8521fff53e8",
-                    "height": 40661
-                }, {
-                    "id": "12ddb75ecc751dd02d481e3f7d7d758d2c00ff5060973ff74babb6a09a8a4df6",
-                    "height": 40662
-                }, {
-                    "id": "032cd8177c7d8133d04ec5d88e724830b0b74f980b99a90ff011f4856fd3088d",
-                    "height": 40663
-                }, {
-                    "id": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
-                    "height": 40670
-                }]
-            }
 
     def mocked_requests_get(*args, **kwargs):
         """
@@ -556,8 +570,6 @@ class TestProofValidate(TransactionTestCase):
 
         if url == urljoin(ACCOUNTING_URL, 'conf/'):
             return MockResponse(TestProofValidate.returned_configs, 200)
-
-        return None
 
     @patch("requests.get", side_effect=mocked_requests_get)
     @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
@@ -804,9 +816,6 @@ class TestValidation(TransactionTestCase):
                 'success': True,
                 'id': 'wrong_id'
             }, 200)
-            pass
-
-        return None
 
     def mocked_requests_get_wrong_pk(*args, **kwargs):
         """
@@ -831,15 +840,6 @@ class TestValidation(TransactionTestCase):
 
         if url == urljoin(ACCOUNTING_URL, 'conf/'):
             return MockResponse(TestValidation.returned_configs, 200)
-
-        if url == urljoin(VERIFIER_ADDRESS, 'get_id'):
-            return MockResponse({
-                'success': True,
-                'id': kwargs['json']['id']
-            }, 200)
-            pass
-
-        return None
 
     def mocked_requests_get(*args, **kwargs):
         """
@@ -870,9 +870,6 @@ class TestValidation(TransactionTestCase):
                 'success': True,
                 'id': kwargs['json']['id']
             }, 200)
-            pass
-
-        return None
 
     def mocked_node_request_block_mined(*args, **kwargs):
         """
@@ -1051,8 +1048,6 @@ class TestValidation(TransactionTestCase):
                 'verified': True,
             }, 200)
 
-        return None
-
     def mocked_requests_post_not_verified(*args, **kwargs):
         """
         mock function requests.get
@@ -1072,8 +1067,6 @@ class TestValidation(TransactionTestCase):
                 'success': True,
                 'verified': False,
             }, 200)
-
-        return None
 
     @patch("requests.get", side_effect=mocked_requests_get)
     @patch("Api.tasks.ValidateShareTask.delay")
@@ -1356,3 +1349,92 @@ class TestHeaderSerializer(TestCase):
         self.assertEqual(decode(votes, 'hex'), header.votes)
         # Check difficulty
         self.assertEqual(header.decode_nbits, 63073)
+
+
+class TestProxyView(TestCase):
+
+    class MockResponse:
+        def __init__(self, json_data, status_code):
+            self.json_data = json_data
+            self.status_code = status_code
+            self.content = json_data
+
+        def json(self):
+            return self.json_data
+
+    def mocked_requests_methods_json(*args, **kwargs):
+        """
+        mock function requests.get
+        """
+
+        return TestProxyView.MockResponse({}, 200)
+
+    def mocked_requests_methods_content(*args, **kwargs):
+        return TestProxyView.MockResponse("this is a test content", 200)
+
+    def setUp(self):
+        self.client = Client()
+
+    @patch("requests.get", side_effect=mocked_requests_methods_json)
+    def test_get_method_proxy(self, mocked_get):
+        """
+        call proxy view with a get request. method must call according api method.
+        :return:
+        """
+        self.client.get("/api/accounting/test/view/")
+        self.assertTrue(mocked_get.called_with("/accounting/test/view/"))
+
+    @patch("requests.get", side_effect=mocked_requests_methods_content)
+    def test_get_method_proxy_no_json(self, mocked_get):
+        """
+        call proxy view with a get request. method must call according api method.
+        content is not json
+        :return:
+        """
+        self.client.get("/api/accounting/test/view/")
+        self.assertTrue(mocked_get.called_with("/accounting/test/view/"))
+
+    @patch("requests.post", side_effect=mocked_requests_methods_json)
+    def test_post_method_proxy(self, mocked_get):
+        """
+        call proxy view with a post request. method must call according api method.
+        :return:
+        """
+        self.client.post("/api/accounting/test/view/")
+        self.assertTrue(mocked_get.called_with("/accounting/test/view/"))
+
+    @patch("requests.put", side_effect=mocked_requests_methods_json)
+    def test_put_method_proxy(self, mocked_get):
+        """
+        call proxy view with a put request. method must call according api method.
+        :return:
+        """
+        self.client.put("/api/accounting/test/view/")
+        self.assertTrue(mocked_get.called_with("/accounting/test/view/"))
+
+    @patch("requests.patch", side_effect=mocked_requests_methods_json)
+    def test_patch_method_proxy(self, mocked_get):
+        """
+        call proxy view with a patch request. method must call according api method.
+        :return:
+        """
+        self.client.patch("/api/accounting/test/view/")
+        self.assertTrue(mocked_get.called_with("/accounting/test/view/"))
+
+    @patch("requests.options", side_effect=mocked_requests_methods_json)
+    def test_options_method_proxy(self, mocked_get):
+        """
+        call proxy view with a options request. method must call according api method.
+        :return:
+        """
+        self.client.options("/api/accounting/test/view/")
+        self.assertTrue(mocked_get.called_with("/accounting/test/view/"))
+
+    @patch("requests.delete", side_effect=mocked_requests_methods_json)
+    def test_delete_method_proxy(self, mocked_get):
+        """
+        call proxy view with a options request. method must call according api method.
+        :return:
+        """
+        self.client.delete("/api/accounting/test/view/")
+        self.assertTrue(mocked_get.called_with("/accounting/test/view/"))
