@@ -1,20 +1,17 @@
 import json
-from hashlib import blake2b
 import struct
 from codecs import decode
+from hashlib import blake2b
 from unittest.mock import patch, call
 from urllib.parse import urljoin
-import json
-from ErgoApi import settings
-from django.contrib.auth.models import User
-from django.test.client import RequestFactory
+
 from django.test.testcases import TransactionTestCase, TestCase
 from rest_framework.exceptions import ValidationError
 
-from Api.serializers import ValidateTransactionSerializer, \
-    ValidateProofSerializer, ValidationShareSerializer
+from Api.serializers import ValidateProofSerializer, ValidationShareSerializer
 from Api.utils.header import HeaderWithoutPow, HeaderSerializer, Reader, Writer
 from Api.utils.share import ValidateShare
+from ErgoApi import settings
 from ErgoApi.settings import ACCOUNTING_URL, VERIFIER_ADDRESS
 
 
@@ -51,6 +48,7 @@ class ConfigurationValueApiTest(TransactionTestCase):
         """
         mock function requests.get
         """
+
         class MockResponse:
             def __init__(self, json_data, status_code):
                 self.json_data = json_data
@@ -61,7 +59,6 @@ class ConfigurationValueApiTest(TransactionTestCase):
 
         url = args[0]
 
-        # TODO return complete config list here!
         if url == urljoin(ACCOUNTING_URL, 'conf/'):
             return MockResponse(ConfigurationValueApiTest.returned_configs, 200)
 
@@ -314,7 +311,7 @@ class TestValidateShare(TransactionTestCase):
     def test_status_invalid(self, mock_setting, accounting_mock, mock):
         """
          Solution
-         Check that d > POOL_DIFFICULTY or left =! right for a share invalid.
+         Check that d > POOL_DIFFICULTY or left != right for a share invalid.
          """
         mock_setting.POOL_DIFFICULTY = 125792089237316195423570985008687907852837564279074904382605163141518161494337
 
@@ -365,7 +362,8 @@ class TestValidateShare(TransactionTestCase):
 
     def test_ec_point_start_byte_2(self):
         block = ValidateShare()
-        output = block._ValidateShare__ec_point(decode("0254043bd5f16526b0184e6521a0bd462783f8B178db37ec034328a23fed4855a9", "hex"))
+        output = block._ValidateShare__ec_point(
+            decode("0254043bd5f16526b0184e6521a0bd462783f8B178db37ec034328a23fed4855a9", "hex"))
         self.assertEqual(output['value'].x,
                          38001759640178464358233514318285492856403682368769743827942002958530733692329)
         self.assertEqual(output['value'].y,
@@ -442,210 +440,6 @@ class TestValidateShare(TransactionTestCase):
             'difficulty': 1,
             "client_ip": '127.0.0.1'
         })])
-
-
-class TestValidateTransaction(TransactionTestCase):
-    """
-    Test class for Validate Transaction Serializer
-    """
-    reset_sequences = True
-    default_configs = {
-        'POOL_BASE_FACTOR': 1000,
-        'TOTAL_REWARD': int(67.5e9),
-        "REWARD_FACTOR_PRECISION": 2,
-        'REWARD_FACTOR': 0.96296297,
-        'SHARE_CHUNK_SIZE': 10,
-        'THRESHOLD_HEIGHT': 10,
-        'THRESHOLD_TIMESTAMP': 120000
-    }
-
-    returned_configs = None
-
-    def mocked_node_request(*args, **kwargs):
-        """
-        mock function node_request for urls 'transactions/check', 'wallet/addresses' and 'utils/ergoTreeToAddress/'
-        """
-        if args[0] == "transactions/check":
-            return {
-                "status": "success",
-                "response": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7"
-            }
-        elif args[0] == "wallet/addresses":
-            return {
-                "status": "success",
-                "response": ["3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"]
-            }
-        elif "utils/ergoTreeToAddress/" in args[0]:
-            return {
-                "status": "success",
-                "response": {
-                    "address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"
-                }
-            }
-
-    def mocked_node_request_external_error_transactions_check(*args, **kwargs):
-        """
-        mock function node_request for urls 'transactions/check', 'wallet/addresses' and 'utils/ergoTreeToAddress/'
-        """
-        if args[0] == "transactions/check":
-            return {
-                "status": "External Error",
-                "response": "External Error"
-            }
-
-    def mocked_node_request_external_error_wallet_addresses(*args, **kwargs):
-        """
-        mock function node_request for urls 'transactions/check', 'wallet/addresses' and 'utils/ergoTreeToAddress/'
-        """
-        if args[0] == "transactions/check":
-            return {
-                "status": "success",
-                "response": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7"
-            }
-        elif args[0] == "wallet/addresses":
-            return {
-                "status": "External Error",
-                "response": "External Error"
-            }
-
-    def mocked_node_request_external_error_utils_ergo_tree_to_address(*args, **kwargs):
-        """
-        mock function node_request for urls 'transactions/check', 'wallet/addresses' and 'utils/ergoTreeToAddress/'
-        """
-        if args[0] == "transactions/check":
-            return {
-                "status": "success",
-                "response": "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7"
-            }
-        elif args[0] == "wallet/addresses":
-            return {
-                "status": "success",
-                "response": ["3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"]
-            }
-        elif "utils/ergoTreeToAddress/" in args[0]:
-            return {
-                "status": "External Error",
-                "response": "External Error"
-            }
-
-    def mocked_requests_get(*args, **kwargs):
-        """
-        mock function requests.get
-        """
-
-        class MockResponse:
-            def __init__(self, json_data, status_code):
-                self.json_data = json_data
-                self.status_code = status_code
-
-            def json(self):
-                return self.json_data
-
-        url = args[0]
-
-        if url == urljoin(ACCOUNTING_URL, 'conf/'):
-            return MockResponse(TestProofValidate.returned_configs, 200)
-
-        return None
-
-    @patch("requests.get", side_effect=mocked_requests_get)
-    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
-    def test_transaction_valid(self, mock_node, mock):
-        """
-        In this scenario we want to test the functionality of Validate Transaction when
-        it is called function validate serializer.
-        We expect that the status be "valid" and output message Transaction is valid and tx_id.
-        :return:
-        """
-        configs = dict(TestProofValidate.default_configs)
-        TestProofValidate.returned_configs = configs
-        # Get data input
-        with open("Api/data_testing/transaction_valid.json", "r") as read_file:
-            data_input = json.load(read_file)
-        # Create object from class ValidateTransactionSerializer and call function validate for validation Transaction
-        transaction = ValidateTransactionSerializer()
-        response = transaction.validate(data_input)
-
-        # We expect that the status be "valid" and output message "Transaction is valid" and tx_id.
-        self.assertEqual(response.get("message"), "Transaction is valid")
-        self.assertEqual(response.get("status"), "valid")
-        self.assertEqual(response.get("tx_id"), "a1713c7d26e6d578cf2787425d07b9a6e4f010346f8172c84484ba508c85edf7")
-
-    @patch("requests.get", side_effect=mocked_requests_get)
-    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
-    def test_invalid_value_wallet_address(self, mock_node, mock):
-        """
-        In this scenario we want to test the functionality of Validate Transaction when
-        it is called function validate serializer.
-        We expect that the status 'invalid' and output Transaction is invalid because sum of value
-         isn"t biggest than policy pool reward or wallet address is invalid.
-        :return:
-        """
-        configs = dict(TestProofValidate.default_configs)
-        TestProofValidate.returned_configs = configs
-        # Get data input
-        with open("Api/data_testing/invalid_value_wallet_address.json", "r") as read_file:
-            data_input = json.load(read_file)
-        # Create object from class ValidateTransactionSerializer and call function validate for validation Transaction
-        transaction = ValidateTransactionSerializer()
-        # We expect that raises ValidationError
-        with self.assertRaises(ValidationError):
-            transaction.validate(data_input)
-
-    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request_external_error_transactions_check)
-    def test_node_response_error_transactions_check(self, mock_node):
-        """
-        In this scenario we want to test the functionality of Validate Transaction when
-        it is called function validate serializer.
-        We expect that the status 'failed' because node send a response with status code except 200
-         after call API transactions/check
-        :return:
-        """
-        data_input = {
-            "transaction": {}
-        }
-        # Create object from class ValidateTransactionSerializer and call function validate for validation Transaction
-        transaction = ValidateTransactionSerializer()
-        # check exception of transaction validate
-        with self.assertRaises(ValidationError):
-            transaction.validate(data_input)
-
-    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request_external_error_wallet_addresses)
-    def test_node_response_error_wallet_addresses(self, mock_node):
-        """
-        In this scenario we want to test the functionality of Validate Transaction when
-        it is called function validate serializer.
-        We expect that the status 'failed' because node send a response with status code except 200
-         after call API wallet/addresses
-        :return:
-        """
-        data_input = {
-            "transaction": {}
-        }
-        # Create object from class ValidateTransactionSerializer and call function validate for validation Transaction
-        transaction = ValidateTransactionSerializer()
-        # check exception of transaction validate
-        with self.assertRaises(ValidationError):
-            transaction.validate(data_input)
-
-    @patch("Api.utils.general.General.node_request",
-           side_effect=mocked_node_request_external_error_utils_ergo_tree_to_address)
-    def test_node_response_error_utils_ergo_tree_to_address(self, mock_node):
-        """
-        In this scenario we want to test the functionality of Validate Transaction when
-        it is called function validate serializer.
-        We expect that the status 'failed' because node send a response with status code except 200
-         after call API utils/ergoTreeToAddress
-        :return:
-        """
-        # Get data input
-        with open("Api/data_testing/node_response_error_utils_ergo_tree_to_address.json", "r") as read_file:
-            data_input = json.load(read_file)
-        # Create object from class ValidateTransactionSerializer and call function validate for validation Transaction
-        transaction = ValidateTransactionSerializer()
-        # check exception of transaction validate
-        with self.assertRaises(ValidationError):
-            transaction.validate(data_input)
 
 
 class TestProofValidate(TransactionTestCase):
@@ -981,6 +775,72 @@ class TestValidation(TransactionTestCase):
                 }]
             }
 
+    def mocked_requests_get_wrong_id(*args, **kwargs):
+        """
+        mock function requests.get
+        """
+
+        class MockResponse:
+            def __init__(self, json_data, status_code):
+                self.json_data = json_data
+                self.status_code = status_code
+
+            def json(self):
+                return self.json_data
+
+        url = args[0]
+
+        if url == urljoin(VERIFIER_ADDRESS, 'address_to_pk'):
+            return MockResponse({
+                'success': True,
+                'id': '02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C',
+            }, 200)
+
+        if url == urljoin(ACCOUNTING_URL, 'conf/'):
+            return MockResponse(TestValidation.returned_configs, 200)
+
+        if url == urljoin(VERIFIER_ADDRESS, 'get_id'):
+            return MockResponse({
+                'success': True,
+                'id': 'wrong_id'
+            }, 200)
+            pass
+
+        return None
+
+    def mocked_requests_get_wrong_pk(*args, **kwargs):
+        """
+        mock function requests.get
+        """
+
+        class MockResponse:
+            def __init__(self, json_data, status_code):
+                self.json_data = json_data
+                self.status_code = status_code
+
+            def json(self):
+                return self.json_data
+
+        url = args[0]
+
+        if url == urljoin(VERIFIER_ADDRESS, 'address_to_pk'):
+            return MockResponse({
+                'success': True,
+                'id': 'wrong pk',
+            }, 200)
+
+        if url == urljoin(ACCOUNTING_URL, 'conf/'):
+            return MockResponse(TestValidation.returned_configs, 200)
+
+        if url == urljoin(VERIFIER_ADDRESS, 'get_id'):
+            return MockResponse({
+                'success': True,
+                'id': kwargs['json']['id']
+            }, 200)
+            pass
+
+        return None
+
     def mocked_requests_get(*args, **kwargs):
         """
         mock function requests.get
@@ -1002,9 +862,216 @@ class TestValidation(TransactionTestCase):
                 'id': '02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C',
             }, 200)
 
-        # TODO return complete config list here!
         if url == urljoin(ACCOUNTING_URL, 'conf/'):
             return MockResponse(TestValidation.returned_configs, 200)
+
+        if url == urljoin(VERIFIER_ADDRESS, 'get_id'):
+            return MockResponse({
+                'success': True,
+                'id': kwargs['json']['id']
+            }, 200)
+            pass
+
+        return None
+
+    def mocked_node_request_block_mined(*args, **kwargs):
+        """
+        mock function node_request for urls 'transactions/check', 'wallet/addresses' and 'utils/ergoTreeToAddress/'
+        """
+        if args[0] == "transactions/check":
+            return {
+                "status": "External Error",
+                "response": {
+                    "detail": "blah blah Every input of the transaction should be in UTXO blah blah"
+                }
+            }
+
+        elif args[0] == "wallet/addresses":
+            return {
+                "status": "success",
+                "response": ["3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"]
+            }
+        elif "utils/ergoTreeToAddress/" in args[0]:
+            return {
+                "status": "success",
+                "response": {
+                    "address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"
+                }
+            }
+        elif args[0] == "info":
+            return {
+                "status": "success",
+                "response": {
+                    "headersHeight": 40670,
+                    "difficulty": 3888644095
+                }
+            }
+        elif args[0] == "/blocks/lastHeaders/1":
+            return {
+                "status": "success",
+                "response": [{
+                    "headersHeight": 40670,
+                    "difficulty": 3888644095,
+                    "timestamp": 1574114138065
+                }]
+            }
+        elif args[0] == "/blocks/at/97666":
+            return {
+                "status": "success",
+                "response": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
+            }
+        elif "/blocks/chainSlice?fromHeight" in args[0]:
+            return {
+                "status": "success",
+                "response": [{
+                    "id": "e845c88d5044b0f427ac15a444b172e4eb7b3c13ce321a33bc49b8521fff53e8",
+                    "height": 40661
+                }, {
+                    "id": "12ddb75ecc751dd02d481e3f7d7d758d2c00ff5060973ff74babb6a09a8a4df6",
+                    "height": 40662
+                }, {
+                    "id": "032cd8177c7d8133d04ec5d88e724830b0b74f980b99a90ff011f4856fd3088d",
+                    "height": 40663
+                }, {
+                    "id": "d3a0ee8c30a4243efced2d3927fc760ae102670f1d7328ee48cd3a2954e08bd2",
+                    "height": 40670
+                }]
+            }
+
+        elif "blocks/chainSlice" in args[0]:
+            return {
+                "status": "success",
+                "response": [{
+                    "extensionId": "03f9fb64f0705614d9a0808024a440736cfb0277825b1d691c020c28da0d7d4b",
+                    "difficulty": "3888644096",
+                    "votes": "040000",
+                    "timestamp": 1580688457671,
+                    "size": 283,
+                    "stateRoot": "0e561c78728bef60886c020b96b28fb6f9e1feddfe148fc14e4998d684605df914",
+                    "height": 97956,
+                    "nBits": 83945416,
+                    "version": 1,
+                    "id": "5c9d34a3fd6d691580ff3e1f9beca9b047ab13ef349d99e7d43639db624994cf",
+                    "adProofsRoot": "f253c40e3012e647b157909b0ae7c0cba21e791638cec5fce499ce7c1a86ef32",
+                    "transactionsRoot": "f20e33850506170ba21258a0f16784e85ef6943ba5cd9e7838ba12d2a2895281",
+                    "extensionHash": "0e89a57d29a428567c48c9152a3c86197f46f94c09171968cff7e8f3f908873e",
+                    "powSolutions": {
+                        "pk": "0354efc32652cad6cf1231be987afa29a686af30b5735995e3ce51339c4d0ca380",
+                        "w": "0361346c34a7eab4284862be86d290462b36888b7441caed7013de31ec21398ed5",
+                        "n": "000005d8c17b7c2b",
+                        "d": 29096729143384357727218333975771617924424631306711899957319626220230
+                    },
+                    "adProofsId": "d88e1873ca16ebdf52bd7205e1e0912711acce7d0bfdb350db5c4a400e8f5447",
+                    "transactionsId": "299ac89bbcd51245167a495d19772df2ad5fdd3f07414e63e237d9b636a58f36",
+                    "parentId": "7e0bb35f8bb090888f743203bc3102dca6d21514d48da1be9c318e0220072ff0"
+                }]
+            }
+
+    def mocked_node_request_external_error_needs_custom_context(*args, **kwargs):
+        """
+        mock function node_request for urls 'transactions/check', 'wallet/addresses' and 'utils/ergoTreeToAddress/'
+        """
+        if args[0] == "transactions/check":
+            return {
+                "status": "External Error",
+                "response": {
+                    "detail": "blah blah Scripts of all transaction inputs should pass verification blah blah"
+                }
+            }
+
+        elif args[0] == "wallet/addresses":
+            return {
+                "status": "success",
+                "response": ["3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"]
+            }
+        elif "utils/ergoTreeToAddress/" in args[0]:
+            return {
+                "status": "success",
+                "response": {
+                    "address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"
+                }
+            }
+        elif args[0] == "info":
+            return {
+                "status": "success",
+                "response": {
+                    "headersHeight": 40670,
+                    "difficulty": 3888644095
+                }
+            }
+        elif args[0] == "/blocks/lastHeaders/1":
+            return {
+                "status": "success",
+                "response": [{
+                    "headersHeight": 40670,
+                    "difficulty": 3888644095,
+                    "timestamp": 1574114138065
+                }]
+            }
+        elif args[0] == "/blocks/at/97666":
+            return {
+                "status": "success",
+                "response": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
+            }
+        elif "/blocks/chainSlice?fromHeight" in args[0]:
+            return {
+                "status": "success",
+                "response": [{
+                    "id": "e845c88d5044b0f427ac15a444b172e4eb7b3c13ce321a33bc49b8521fff53e8",
+                    "height": 40661
+                }, {
+                    "id": "12ddb75ecc751dd02d481e3f7d7d758d2c00ff5060973ff74babb6a09a8a4df6",
+                    "height": 40662
+                }, {
+                    "id": "032cd8177c7d8133d04ec5d88e724830b0b74f980b99a90ff011f4856fd3088d",
+                    "height": 40663
+                }, {
+                    "id": "d3a0ee8c30a4243efced2d3927fc760ae102670f1d7328ee48cd3a2954e08bd2",
+                    "height": 40670
+                }]
+            }
+
+    def mocked_requests_post_verified(*args, **kwargs):
+        """
+        mock function requests.get
+        """
+
+        class MockResponse:
+            def __init__(self, json_data, status_code):
+                self.json_data = json_data
+                self.status_code = status_code
+
+            def json(self):
+                return self.json_data
+
+        url = args[0]
+        if url == urljoin(VERIFIER_ADDRESS, 'verify'):
+            return MockResponse({
+                'success': True,
+                'verified': True,
+            }, 200)
+
+        return None
+
+    def mocked_requests_post_not_verified(*args, **kwargs):
+        """
+        mock function requests.get
+        """
+
+        class MockResponse:
+            def __init__(self, json_data, status_code):
+                self.json_data = json_data
+                self.status_code = status_code
+
+            def json(self):
+                return self.json_data
+
+        url = args[0]
+        if url == urljoin(VERIFIER_ADDRESS, 'verify'):
+            return MockResponse({
+                'success': True,
+                'verified': False,
+            }, 200)
 
         return None
 
@@ -1034,6 +1101,137 @@ class TestValidation(TransactionTestCase):
         self.assertEqual(response.status_code, 200)
         # check the content of the response
         self.assertEqual(response.json(), result)
+
+    @patch("requests.get", side_effect=mocked_requests_get)
+    @patch("Api.tasks.ValidateShareTask.delay")
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request_block_mined)
+    @patch("Api.utils.header.Writer.get_bytes")
+    def test_post_valid_block_mined(self, pow_mock, mock_node, mock_task, mock3):
+        """
+        the block is mined but it is valid since msg_pre_image matches the mined block
+        """
+        configs = dict(TestValidation.default_configs)
+        # Get data input
+        with open("Api/data_testing/data_input_validation_valid.json", "r") as read_file:
+            data_input = json.load(read_file)
+
+        pow_mock.return_value = decode(data_input['proof']['msg_pre_image'], 'hex')
+        # response of API /api/validation/ should be this
+        result = {
+            "status": "OK"
+        }
+        # send a http "post" request to the Validation endpoint
+        TestValidation.returned_configs = configs
+        response = self.client.post("/api/validation/", data=data_input, content_type="application/json")
+        # check the status of the response
+        self.assertEqual(response.status_code, 200)
+        # check the content of the response
+        self.assertEqual(response.json(), result)
+
+    @patch("requests.get", side_effect=mocked_requests_get)
+    @patch("Api.tasks.ValidateShareTask.delay")
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request_block_mined)
+    @patch("Api.utils.header.Writer.get_bytes")
+    def test_post_invalid_block_mined(self, pow_mock, mock_node, mock_task, mock3):
+        """
+        the block is mined but it is not valid since msg_pre_image does not match the mined block
+        """
+        configs = dict(TestValidation.default_configs)
+        # Get data input
+        with open("Api/data_testing/data_input_validation_valid.json", "r") as read_file:
+            data_input = json.load(read_file)
+
+        pow_mock.return_value = decode('ABAA', 'hex')
+        # send a http "post" request to the Validation endpoint
+        TestValidation.returned_configs = configs
+        response = self.client.post("/api/validation/", data=data_input, content_type="application/json")
+        # check the status of the response
+        self.assertEqual(response.status_code, 400)
+
+    @patch("requests.get", side_effect=mocked_requests_get_wrong_pk)
+    @patch("Api.tasks.ValidateShareTask.delay")
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_post_pk_not_match(self, mock_node, mock_task, mock3):
+        """
+        all ok but miner pk does not match with miner address
+        """
+        configs = dict(TestValidation.default_configs)
+        # Get data input
+        with open("Api/data_testing/data_input_validation_valid.json", "r") as read_file:
+            data_input = json.load(read_file)
+        # send a http "post" request to the Validation endpoint
+        TestValidation.returned_configs = configs
+        response = self.client.post("/api/validation/", data=data_input, content_type="application/json")
+        # check the status of the response
+        self.assertEqual(response.status_code, 400)
+
+    @patch("requests.get", side_effect=mocked_requests_get)
+    @patch("requests.post", side_effect=mocked_requests_post_not_verified)
+    @patch("Api.tasks.ValidateShareTask.delay")
+    @patch("Api.utils.general.General.node_request",
+           side_effect=mocked_node_request_external_error_needs_custom_context)
+    def test_post_invalid_with_custom_verify(self, mock_node, mock_task, verifier, mock3):
+        """
+        transaction not verified with node and custom verifier
+        :return:
+        """
+        configs = dict(TestValidation.default_configs)
+        # Get data input
+        with open("Api/data_testing/data_input_validation_valid.json", "r") as read_file:
+            data_input = json.load(read_file)
+        # response of API /api/validation/ should be this
+        # send a http "post" request to the Validation endpoint
+        TestValidation.returned_configs = configs
+        response = self.client.post("/api/validation/", data=data_input, content_type="application/json")
+        # check the status of the response
+        self.assertEqual(response.status_code, 400)
+
+    @patch("requests.get", side_effect=mocked_requests_get)
+    @patch("requests.post", side_effect=mocked_requests_post_verified)
+    @patch("Api.tasks.ValidateShareTask.delay")
+    @patch("Api.utils.general.General.node_request",
+           side_effect=mocked_node_request_external_error_needs_custom_context)
+    def test_post_valid_with_custom_verify(self, mock_node, mock_task, verifier, mock3):
+        """
+        transaction was not verified with node but was ok by custom verifier
+        :return:
+        """
+        configs = dict(TestValidation.default_configs)
+        # Get data input
+        with open("Api/data_testing/data_input_validation_valid.json", "r") as read_file:
+            data_input = json.load(read_file)
+        # response of API /api/validation/ should be this
+        result = {
+            "status": "OK"
+        }
+        # send a http "post" request to the Validation endpoint
+        TestValidation.returned_configs = configs
+        response = self.client.post("/api/validation/", data=data_input, content_type="application/json")
+        # check the status of the response
+        self.assertEqual(response.status_code, 200)
+        # check the content of the response
+        self.assertEqual(response.json(), result)
+
+    @patch("requests.get", side_effect=mocked_requests_get_wrong_id)
+    @patch("requests.post", side_effect=mocked_requests_post_verified)
+    @patch("Api.tasks.ValidateShareTask.delay")
+    @patch("Api.utils.general.General.node_request",
+           side_effect=mocked_node_request_external_error_needs_custom_context)
+    def test_post_valid_with_custom_verify_id_not_match(self, mock_node, mock_task, verifier, mock3):
+        """
+        transaction was not verified with node but was ok by custom verifier
+        real id of transaction mismatch with transaction[id]
+        :return:
+        """
+        configs = dict(TestValidation.default_configs)
+        # Get data input
+        with open("Api/data_testing/data_input_validation_valid.json", "r") as read_file:
+            data_input = json.load(read_file)
+        # send a http "post" request to the Validation endpoint
+        TestValidation.returned_configs = configs
+        response = self.client.post("/api/validation/", data=data_input, content_type="application/json")
+        # check the status of the response
+        self.assertEqual(response.status_code, 400)
 
     @patch("requests.get", side_effect=mocked_requests_get)
     @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request_invalid)
