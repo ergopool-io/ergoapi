@@ -100,15 +100,30 @@ class DefaultView(APIView):
 
     def send_request(self, request, url, method_name):
         client_ip = request.META.get('REMOTE_ADDR')
+        request_headers = dict(request.headers)
+        request_headers = {key.lower(): val for key, val in request_headers.items()}
         headers = {'source-ip': client_ip}
+        if 'cookie' in request_headers.keys():
+            headers.update({'cookie': request_headers['cookie']})
+
         method = getattr(requests, method_name)
-        response = method(urljoin(ACCOUNTING, url + '/'), data=request.data,
-                          headers=headers, params=dict(request.query_params))
+        response = None
         try:
-            result = modify_pagination(request, response.json())
+            response = method(urljoin(ACCOUNTING, url + '/'), data=request.data,
+                              headers=headers, params=dict(request.query_params))
+            try:
+                result = modify_pagination(request, response.json())
+                return Response(result, status=response.status_code)
+
+            except:
+                return Response(response.json(), status=response.status_code)
+
         except:
-            result = response.content
-        return Response(result, status=response.status_code)
+            if response:
+                logger.critical('Could not connect to accounting!, {}, {}'.format(response, response.content))
+            else:
+                logger.critical('Could not connect to accounting!, {}'.format(response))
+            return Response({'message': 'could not connect to accounting!'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def get(self, request, url=None):
         return self.send_request(request, url, 'get')
