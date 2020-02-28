@@ -28,9 +28,6 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet,
     """
     serializer_class = serializers.ConfigurationValueSerializer
 
-    def get_queryset(self):
-        return None
-
     def list(self, request, *args, **kwargs):
         return Response(self.get_response(request.configs))
 
