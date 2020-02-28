@@ -111,18 +111,18 @@ class ValidateProofSerializer(serializers.Serializer):
         :param height:
         :return:
         """
-        block_chain = General.node_request('/blocks/chainSlice?fromHeight=%s&toHeight=%s' %
-                                           (str(height - self.configs.THRESHOLD_HEIGHT), str(height)),
-                                           {'accept': 'application/json'})
-        parent_id = header.parentId.hex()
-        path = list()
-        for block in block_chain.get('response'):
-            path.append(block['height'])
-            if block['id'] == parent_id:
-                return str(len(path))
-
-        # request to Ergo Explorer for get fork block_chain if not exist in main block chain
         try:
+            block_chain = General.node_request('/blocks/chainSlice?fromHeight=%s&toHeight=%s' %
+                                               (str(height - self.configs.THRESHOLD_HEIGHT), str(height)),
+                                               {'accept': 'application/json'})
+            parent_id = header.parentId.hex()
+            path = list()
+            for block in block_chain.get('response'):
+                path.append(block['height'])
+                if block['id'] == parent_id:
+                    return str(len(path))
+
+            # request to Ergo Explorer for get fork block_chain if not exist in main block chain
             path_second = list()
             url = urljoin(ERGO_EXPLORER_ADDRESS, 'stats/forks')
             query = {'fromHeight': height - self.configs.THRESHOLD_HEIGHT}
@@ -137,8 +137,7 @@ class ValidateProofSerializer(serializers.Serializer):
             return '-1'
         except ValidationError as e:
             logger.error("Can not resolve response from Ergo Explorer")
-            logger.error(e)
-            raise ValidationError("Can not resolve response from Ergo Explorer")
+            return '-1'
 
     def validate(self, attrs):
         """
