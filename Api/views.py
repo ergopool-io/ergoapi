@@ -96,12 +96,14 @@ class DefaultView(APIView):
     """
 
     def send_request(self, request, url, method_name):
-        client_ip = request.META.get('REMOTE_ADDR')
+        client_ip = request.META.get('REMOTE_ADDR', '')
         request_headers = dict(request.headers)
         request_headers = {key.lower(): val for key, val in request_headers.items()}
         headers = {'source-ip': client_ip}
-        if 'cookie' in request_headers.keys():
-            headers.update({'cookie': request_headers['cookie']})
+        to_add_headers = ['cookie', 'authorization']
+        for item in to_add_headers:
+            if item in request_headers.keys():
+                headers.update({item: request_headers[item]})
 
         method = getattr(requests, method_name)
         response = None
