@@ -1241,16 +1241,11 @@ class TestValidation(TransactionTestCase):
         with open("Api/data_testing/data_input_validation_invalid.json", "r") as read_file:
             data_input = json.load(read_file)
         # response of API /api/validation/ should be this
-        result = {
-            'message': ['leaf not equal with tx_id']
-        }
         # send a http "post" request to the Validation endpoint
         TestValidation.returned_configs = configs
         response = self.client.post("/api/validation/", data=data_input, content_type="application/json")
         # check the status of the response
         self.assertEqual(response.status_code, 400)
-        # check the content of the response
-        self.assertEqual(response.json(), result)
 
     @patch("requests.get", side_effect=mocked_requests_get)
     def test_post_invalid_number_chunk(self, mock):
@@ -1433,7 +1428,7 @@ class TestProxyView(TestCase):
     @patch("requests.delete", side_effect=mocked_requests_methods_json)
     def test_delete_method_proxy(self, mocked_get):
         """
-        call proxy view with a options request. method must call according api method.
+        call proxy view with a options request. method must call according api method
         :return:
         """
         self.client.delete("/api/accounting/test/view/")

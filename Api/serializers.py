@@ -144,7 +144,7 @@ class ValidateProofSerializer(serializers.Serializer):
         Validate timestamp and height and difficulty
         :return: status of merkle_proof
         """
-
+        logger.info('validating proof.')
         leaf = attrs['leaf']
         levels_encoded = attrs['levels']
         msg_pre_image_base_16 = attrs['msg_pre_image']
@@ -170,20 +170,20 @@ class ValidateProofSerializer(serializers.Serializer):
         # from last header - THRESHOLD_HEIGHT to the height of header that works on that.
         if header.timestamp < last_header.get('response')[0].get(
                 'timestamp') - self.configs.THRESHOLD_TIMESTAMP:
-            logger.info('Proof is invalid (timestamp) for transaction id {}'.format(leaf))
+            logger.debug('Proof is invalid (timestamp) for transaction id {}'.format(leaf))
             raise ValidationError({'message': 'The proof is invalid.', 'status': 'invalid'})
         if header.height <= height - self.configs.THRESHOLD_HEIGHT:
-            logger.info('Proof is invalid (height) for transaction id {}'.format(leaf))
+            logger.debug('Proof is invalid (height) for transaction id {}'.format(leaf))
             raise ValidationError({'message': 'The proof is invalid.', 'status': 'invalid'})
         if header.decode_nbits < max(int(last_header.get('response')[0].get('difficulty')), int(difficulty)):
-            logger.info('Proof is invalid (difficulty) for transaction id {}'.format(leaf))
+            logger.debug('Proof is invalid (difficulty) for transaction id {}'.format(leaf))
             raise ValidationError({'message': 'The proof is invalid.', 'status': 'invalid'})
         # Generate path
         path = self.__generate_path(header, height)
 
         # Validate_merkle
         if not leaf_hash == txs_root:
-            logger.info('Proof is invalid for transaction id {}'.format(leaf))
+            logger.debug('Proof is invalid for transaction id {}'.format(leaf))
             raise ValidationError({'message': 'The proof is invalid.', 'status': 'invalid'})
 
         # Set parent and next block of candidate block
@@ -280,7 +280,6 @@ class ValidationSerializer(serializers.Serializer):
 
     def __validate_transaction_node(self, attrs):
         transaction = attrs['transaction']
-        pk = attrs['pk']
         msg_pre_image = attrs['proof']['msg_pre_image']
 
         # Send request to node for validate transaction
@@ -288,19 +287,21 @@ class ValidationSerializer(serializers.Serializer):
         data_node = General.node_request('transactions/check', data=transaction, request_type="post")
         node_ok = False
         if data_node['status'] == 'success':
+            logger.info('tx was validated by node, response: {}.'.format(data_node['response']))
             node_ok = True
             tx_id = data_node['response']
 
         transaction_ok = False
         check_block = False
         if data_node['status'] == 'External Error':
+            logger.info('tx was not verified with node.')
             node_result = data_node['response']
             required_msg_custom = 'Scripts of all transaction inputs should pass verification'
             required_msg_mined = 'Every input of the transaction should be in UTXO'
             if 'detail' in node_result and required_msg_custom in node_result['detail']:
-                miner_pk = attrs['addresses']['miner']
-                # there is a chance that custom verifier verifies this transaction
-                res = requests.post(urljoin(VERIFIER_ADDRESS, 'verify'), json={'minerPk': miner_pk,
+                logger.info('trying custom verifier to verify tx.')
+                miner_address = attrs['addresses']['miner']
+                res = requests.post(urljoin(VERIFIER_ADDRESS, 'verify'), json={'minerPk': miner_address,
                                                                                'transaction': transaction})
                 if res.status_code == status.HTTP_200_OK:
                     result = res.json()
@@ -310,8 +311,15 @@ class ValidationSerializer(serializers.Serializer):
                         logger.info('provided transaction was verified with custom verifier')
                         transaction_ok = True
 
+                    else:
+                        logger.info('tx was not verified with custom verifier, {}'.format(result))
+
+                else:
+                    logger.error('verifier returned non 200 response: {}, {}'.format(res, res.content))
+
             if (not transaction_ok) and (('detail' in node_result and required_msg_mined in node_result['detail'])
                                          or check_block):
+                logger.info('tx inputs are spent! checking if blocked is already mined.')
                 reader = Reader(decode(msg_pre_image, 'hex'))
                 header = HeaderSerializer.parse_without_pow(reader)
 
@@ -336,8 +344,11 @@ class ValidationSerializer(serializers.Serializer):
                     logger.info('solved share accepted even though its input boxes was not ok!')
                     transaction_ok = True
 
+                else:
+                    logger.debug('got an non 200 response when getting slice, {}'.format(data_node))
+
         if not node_ok and not transaction_ok:
-            logger.error('Node failed to validate transaction')
+            logger.debug('Could not verify tx with any of our ways, rejecting it.')
             raise ValidationError({"message": data_node['response']})
 
         if transaction_ok:
@@ -356,6 +367,7 @@ class ValidationSerializer(serializers.Serializer):
                 data_node = General.node_request('utils/ergoTreeToAddress/' + output['ergoTree'],
                                                  {'accept': 'application/json'})
                 if data_node['status'] == 'External Error':
+                    logger.error('got an non 200 response from node, {}', data_node)
                     raise ValidationError({
                         "message": data_node['response'],
                         "status": "failed"
@@ -363,6 +375,7 @@ class ValidationSerializer(serializers.Serializer):
                 # Check address after convert ergo tree that would have existed in the wallet_address
                 elif data_node.get('response')['address'] in wallet_address:
                     value = value + output['value']
+
         return value
 
     def __validate_transaction(self, attrs):
@@ -388,7 +401,7 @@ class ValidationSerializer(serializers.Serializer):
                                          {'accept': 'application/json', 'content-type': 'application/json',
                                           'api_key': API_KEY})
         if data_node['status'] == 'External Error':
-            logger.error('Error while getting wallet addresses.')
+            logger.error('error while getting wallet addresses, {}.'.format(data_node))
             raise ValidationError({
                 "message": data_node['response'],
                 "status": "failed"
@@ -403,14 +416,15 @@ class ValidationSerializer(serializers.Serializer):
             TOTAL_REWARD = round((self.configs.TOTAL_REWARD / 1e9) * REWARD_FACTOR, PRECISION)
             TOTAL_REWARD = int(TOTAL_REWARD * 1e9)
 
+            logger.info('needed erg to validate tx is {}, got {}'.format(TOTAL_REWARD, value))
             if value >= TOTAL_REWARD:
-                logger.info('Transaction is valid.')
+                logger.info('value of tx is ok.')
                 response['status'] = 'valid'
                 response['message'] = "Transaction is valid"
             else:
-                logger.error('Transaction is invalid, either wallet address is invalid or the value')
+                logger.error('value of tx is not valid, rejecting.')
                 raise ValidationError({
-                    "message": "Wallet address pool or value of transaction is invalid",
+                    "message": "invalid output pool addresses or invalid amount.",
                     "status": "invalid"
                 })
         attrs.update(response)
@@ -421,15 +435,17 @@ class ValidationSerializer(serializers.Serializer):
         miner_address = attr['addresses']['miner']
         res = requests.get(urljoin(VERIFIER_ADDRESS, 'address_to_pk'), json=miner_address)
         if res.status_code != 200:
+            logger.error('got and non 200 response while getting pk out of address, {}, {}'.format(res, res.content))
             raise ValidationError({
-                "message": "Could not verify miner address integrity with miner pk!",
+                "message": "could not verify miner address integrity with miner pk!",
                 "status": "invalid"
             })
 
         expected_pk = res.json()['id'].lower()
         if pk.lower() != expected_pk:
+            logger.debug('miner address does not match miner pk')
             raise ValidationError({
-                "message": "Could not verify miner address integrity with miner pk!",
+                "message": "the provided miner address does not match with miner pk.",
                 "status": "invalid"
             })
 
@@ -441,8 +457,8 @@ class ValidationSerializer(serializers.Serializer):
         if leaf == tx_id:
             return attrs
         else:
-            logger.error("leaf not equal with tx_id")
-            raise ValidationError({"message": "leaf not equal with tx_id"})
+            logger.debug("leaf does not equal with tx_id")
+            raise ValidationError({"message": "leaf does not equal with tx_id", "status": "invalid"})
 
     def create(self, validated_data):
         pass
