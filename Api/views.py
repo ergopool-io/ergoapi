@@ -69,13 +69,14 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
                 "status": "error",
                 "message": "too big chunk"
             }, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+
+        logger.info('received a share chunk of size {}.'.format(len(data.get('shares', []))))
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         # Get ip of the client that send request
         client_ip = request.META.get('HTTP_X_REAL_IP')
 
-        logger.debug("Tasks run for validate shares")
         for share in data.get('shares', []):
             ValidateShareTask.delay(data['pk'],
                                     share.get('w'),
@@ -87,6 +88,8 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
                                     data['addresses'],
                                     client_ip,
                                     configs.POOL_BASE_FACTOR)
+
+        logger.info("tasks created for each share.")
         return Response({'status': 'OK'}, status=status.HTTP_200_OK)
 
 
@@ -94,7 +97,6 @@ class DefaultView(APIView):
     """
     sends every api requests that is not previously matched to accounting.
     """
-
     def send_request(self, request, url, method_name):
         client_ip = request.META.get('REMOTE_ADDR', '')
         request_headers = dict(request.headers)
