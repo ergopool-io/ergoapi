@@ -75,7 +75,7 @@ class ValidateShare(General, celery.Task):
         result = list(map(lambda i: struct.unpack('>I', extended_hash[i:i + 4])[0] % self.N, range(0, self.K)))
         if len(result) == self.K:
             return list(result)
-        logger.error('Length of map does not equal K.')
+        logger.error('length of map does not equal K.')
         raise ValidationError({
             'status': 'invalid'
         })
@@ -130,7 +130,7 @@ class ValidateShare(General, celery.Task):
             array_byte = b'\x02' + array_byte[1:]
             return {'value': self.curve.decode_point(array_byte + decode('01', 'hex')), 'status': 'success'}
         else:
-            logger.error("First bytes of w_bytes is invalid.")
+            logger.error("first bytes of w_bytes is invalid.")
             raise ValidationError({
                 'status': 'invalid'
             })
@@ -171,6 +171,7 @@ class ValidateShare(General, celery.Task):
         """
         try:
             url = urljoin(ACCOUNTING, "shares/")
+            logger.info('posting share to accounting.')
             response = requests.post(url, json={
                         "miner": share.get("miner"),
                         "share": share.get("share"),
@@ -186,9 +187,12 @@ class ValidateShare(General, celery.Task):
                         "withdraw_address": share.get("addresses").get("withdraw"),
                         "client_ip": share.get("client_ip")
                         })
-            logger.debug(response)
+            if response.status_code != 200:
+                logger.error('got and non 200 response from accounting when posting share, {}, {}'.
+                             format(response,response.content))
             return {'status': 'ok'}
         except requests.exceptions.RequestException as e:
+            logger.error('error while posting share to accounting, {}'.format(e))
             response = {
                 'status': 'error',
                 'message': e
@@ -233,8 +237,7 @@ class ValidateShare(General, celery.Task):
                 p2 = decode(w, "hex")
                 message = decode(msg, "hex")
             except ValueError as e:
-                logger.error("Share input parameters aren't valid.")
-                logger.error(e)
+                logger.error("share input parameters aren't valid, {}.".format(e))
                 raise ValidationError({'status': 'invalid'})
             # Validate solved or valid or invalid (d > pool difficulty)
             logger.info('Validating difficulty for share with pk {}.'.format(pk))
@@ -268,15 +271,14 @@ class ValidateShare(General, celery.Task):
         except ValidationError as e:
             share['status'] = e.args[0]['status']
 
-        # Set flag_logger for number of critical alarm limit according NUMBER_OF_LOG in while true
-        flag_logger = 1
+        num_tried = 0
         while True:
+            num_tried += 1
             response = self.save_share(share)
             if response['status'] == 'ok':
                 break
             else:
-                if not flag_logger % NUMBER_OF_LOG:
-                    logger.critical("Can not send request to Accounting service")
-                    logger.critical(response['message'])
-                    flag_logger += 1
+                if num_tried % NUMBER_OF_LOG == 0:
+                    logger.critical("tired {} times to post share to accounting, all failed, {}".
+                                    format(num_tried, response))
                 time.sleep(1)
