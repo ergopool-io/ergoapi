@@ -1433,3 +1433,120 @@ class TestProxyView(TestCase):
         """
         self.client.delete("/api/accounting/test/view/")
         self.assertTrue(mocked_get.called_with("/accounting/test/view/"))
+
+
+class TestGeneratePath(TestCase):
+    default_configs = {
+        'POOL_BASE_FACTOR': 1000,
+        'TOTAL_REWARD': int(67.5e9),
+        "REWARD_FACTOR_PRECISION": 2,
+        'REWARD_FACTOR': 0.96296297,
+        'SHARE_CHUNK_SIZE': 10,
+        'THRESHOLD_HEIGHT': 10,
+        'THRESHOLD_TIMESTAMP': 120000
+    }
+
+    def mocked_requests_get(*args, **kwargs):
+        """
+        mock function requests.get
+        """
+
+        class MockResponse:
+            def __init__(self, json_data, status_code):
+                self.json_data = json_data
+                self.status_code = status_code
+
+            def json(self):
+                return self.json_data
+
+        url = args[0]
+
+        if url == urljoin(ACCOUNTING_URL, 'conf/'):
+            return MockResponse(TestGeneratePath.default_configs, 200)
+
+        elif 'stats/forks' in url:
+            return MockResponse(json.load(open('Api/data_testing/path_forks.json', 'r')), 200)
+
+    def mocked_node_request(*args, **kwargs):
+        """
+        mock function node_request for urls 'info', '/blocks/lastHeaders/', '/blocks/at/'and '/blocks/chainSlice'
+        """
+        url = args[0]
+        if "/blocks/chainSlice?fromHeight" in url:
+            slice = json.load(open("Api/data_testing/path_chain_slice.json", "r"))
+            return {
+                "status": "success",
+                "response": slice
+            }
+
+        if "/blocks/at/109201" == url:
+            return {
+                "status": "success",
+                "response": [
+                    'a', 'b', '4f12421001ebec488c916d65868bba04db117e5cd76026fe0e524b083798ac41',
+                    'c', 'd'
+                ]
+            }
+
+        if "/blocks/at/109200" == url:
+            return {
+                "status": "success",
+                "response": [
+                    'a', 'fffffffff1ebec488c916d65868bba04db117e5cd76026fe0e524b083798ac41',
+                    'c', 'd'
+                ]
+            }
+
+        return {
+            "status": "success",
+            "response": []
+        }
+
+    def setUp(self) -> None:
+        self.CUR_HEIGHT = 109208
+
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    @patch("requests.get", side_effect=mocked_requests_get)
+    def test_on_main_chain(self, request_mock, node_mock):
+        """
+        the provided block is on the main chain, it is 3 block away, should return only one number
+        """
+        proofSerializer = ValidateProofSerializer()
+        parent_id = '7b0e7e7d3ce503b86201674b071700a2b8a398e9cbfd02e1b853089f119eb342'
+        res = proofSerializer.generate_path(parent_id, self.CUR_HEIGHT)
+        self.assertEqual(res, '4')
+
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    @patch("requests.get", side_effect=mocked_requests_get)
+    def test_on_fork_one_away(self, request_mock, node_mock):
+        """
+        the provided block is on a fork, it is 1 block away in that fork, should return 3 numbers
+        """
+        proofSerializer = ValidateProofSerializer()
+        parent_id = '4f12421001ebec488c916d65868bba04db117e5cd76026fe0e524b083798ac41'
+        res = proofSerializer.generate_path(parent_id, self.CUR_HEIGHT)
+        self.assertEqual(res, '3,3,1')
+
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    @patch("requests.get", side_effect=mocked_requests_get)
+    def test_on_fork_4_away(self, request_mock, node_mock):
+        """
+        the provided block is on a fork, it is 4 block away in that fork, should return 3 numbers
+        """
+        proofSerializer = ValidateProofSerializer()
+        parent_id = 'fffffffff1ebec488c916d65868bba04db117e5cd76026fe0e524b083798ac41'
+        res = proofSerializer.generate_path(parent_id, self.CUR_HEIGHT)
+        self.assertEqual(res, '2,2,4')
+
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    @patch("requests.get", side_effect=mocked_requests_get)
+    def test_not_exists(self, request_mock, node_mock):
+        """
+        provided block does not exist on forks and main chain
+        """
+        proofSerializer = ValidateProofSerializer()
+        parent_id = 'invalid_id'
+        res = proofSerializer.generate_path(parent_id, self.CUR_HEIGHT)
+        self.assertEqual(res, '-1')
+
+
