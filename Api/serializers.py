@@ -103,27 +103,21 @@ class ValidateProofSerializer(serializers.Serializer):
                 leaf_hash = General.blake(b'\x01' + leaf_hash + level[0])
         return leaf_hash
 
-    def __generate_path(self, header, height):
+    def generate_path(self, parent_id, height):
         """
-        generate path from last header - THRESHOLD_HEIGHT to the height of header that works on that
-        # TODO: Complete send request to accounting
-        :param header: header of block (msg_pre_image)
-        :param height:
-        :return:
+        generate path of the provided share's block
+        :param parent_id: parent_id of the block in hex
+        :return: three comma-separated numbers, (#block to go ahead in main chain, nth fork, '#blocks to go ahead in that chain)
         """
         try:
             block_chain = General.node_request('/blocks/chainSlice?fromHeight=%s&toHeight=%s' %
                                                (str(height - self.configs.THRESHOLD_HEIGHT), str(height)),
                                                {'accept': 'application/json'})
-            parent_id = header.parentId.hex()
-            path = list()
-            for block in block_chain.get('response'):
-                path.append(block['height'])
+            for i, block in enumerate(block_chain.get('response')):
                 if block['id'] == parent_id:
-                    return str(len(path))
+                    return str(i + 1)
 
             # request to Ergo Explorer for get fork block_chain if not exist in main block chain
-            path_second = list()
             url = urljoin(ERGO_EXPLORER_ADDRESS, 'stats/forks')
             query = {'fromHeight': height - self.configs.THRESHOLD_HEIGHT}
             response = requests.get(url, query)
@@ -131,9 +125,15 @@ class ValidateProofSerializer(serializers.Serializer):
             for fork in block_chain.get('forks')[::-1]:
                 for number, member in enumerate(fork['members']):
                     if parent_id == member[1]:
-                        path_second.append(fork['members'][:number + 1])
-                        number_chain = path.index(fork.get('branchPointHeight'))
-                        return ','.join(str(number_chain + 1) + str(number + 1) + str(len(path_second)))
+                        forks = General.node_request('/blocks/at/{}'.format(fork['branchPointHeight']),
+                                                     {'accept': 'application/json'})
+                        if forks['status'] != 'success':
+                            break
+
+                        forks = forks['response']
+                        ind = forks.index(parent_id)
+                        return ','.join(str(10 - (height - fork.get('branchPointHeight')))
+                                        + str(ind + 1) + str(number + 1))
             return '-1'
         except ValidationError as e:
             logger.error("Can not resolve response from Ergo Explorer")
@@ -179,7 +179,7 @@ class ValidateProofSerializer(serializers.Serializer):
             logger.debug('Proof is invalid (difficulty) for transaction id {}'.format(leaf))
             raise ValidationError({'message': 'The proof is invalid.', 'status': 'invalid'})
         # Generate path
-        path = self.__generate_path(header, height)
+        path = self.generate_path(header.parentId.hex(), height)
 
         # Validate_merkle
         if not leaf_hash == txs_root:
