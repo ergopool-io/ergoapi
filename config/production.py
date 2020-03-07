@@ -18,6 +18,10 @@ DATABASES = {
 
 # Address Node (ex: "http://127.0.0.1:9053/")
 NODE_ADDRESS = "http://%s:%s/" % (os.environ.get("NODE_HOST"), os.environ.get("NODE_PORT", "9052"))
+# to avoid getting wallet addresses every time
+WALLET_ADDRESS = os.environ.get("WALLET_ADDRESS", None)
+# to avoid converting wallet address to ergo tree every time
+WALLET_ADDRESS_TREE = os.environ.get("WALLET_ADDRESS_TREE", None)
 
 # Explorer ergo (ex: https://api.ergoplatform.com/)
 ERGO_EXPLORER_ADDRESS = "https://%s/" % (os.environ.get("ERGO_EXPLORER_ADDRESS",

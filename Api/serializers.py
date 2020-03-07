@@ -3,6 +3,7 @@ from codecs import decode, encode
 from urllib.parse import urljoin
 
 import requests
+from django.conf import settings
 from django.utils.deconstruct import deconstructible
 from rest_framework import serializers, status
 from rest_framework.exceptions import ValidationError
@@ -12,6 +13,9 @@ from Api.utils.header import Reader, HeaderSerializer, HeaderWithoutPow, Writer
 from ErgoApi.settings import API_KEY, ERGO_EXPLORER_ADDRESS, VERIFIER_ADDRESS
 
 logger = logging.getLogger(__name__)
+
+WALLET_ADDRESS = getattr(settings, "WALLET_ADDRESS")
+WALLET_ADDRESS_TREE = getattr(settings, "WALLET_ADDRESS_TREE")
 
 
 @deconstructible
@@ -359,21 +363,40 @@ class ValidationSerializer(serializers.Serializer):
 
         return tx_id
 
-    def __value_of_transaction(self, wallet_address, transaction):
+    def __value_of_transaction(self, transaction):
+        ergo_tree = WALLET_ADDRESS_TREE
+        if ergo_tree is None:
+            logger.debug('ergo tree is not set in production!')
+            logger.info("getting wallet addresses from node to validate transaction.")
+            data_node = None
+            try:
+                # Send request to node for get list of wallet addresses
+                data_node = General.node_request('wallet/addresses',
+                                                 {'accept': 'application/json', 'content-type': 'application/json',
+                                                  'api_key': API_KEY})
+                wallet_address = data_node.get('response')[0]
+                data_node = General.node_request('script/addressToTree/' + wallet_address,
+                                                 {'accept': 'application/json'})
+                ergo_tree = data_node['response']['tree']
+
+            except Exception as e:
+                logger.error('error while getting wallet addresses, {}. exception: {}.'.format(data_node, e))
+                raise ValidationError({
+                    "message": 'exception while getting wallet addresses from node.',
+                    "status": "failed"
+                })
+
+        if ergo_tree is None:
+            logger.critical('could not get ergo tree')
+            raise ValidationError({
+                "message": 'could not verify transaction because could not get ergo tree.',
+                "status": "failed"
+            })
+
         value = 0
         if 'outputs' in transaction:
             for output in transaction['outputs']:
-                # Send request to node for Generate Ergo address from hex-encoded ErgoTree
-                data_node = General.node_request('utils/ergoTreeToAddress/' + output['ergoTree'],
-                                                 {'accept': 'application/json'})
-                if data_node['status'] == 'External Error':
-                    logger.error('got an non 200 response from node, {}', data_node)
-                    raise ValidationError({
-                        "message": data_node['response'],
-                        "status": "failed"
-                    })
-                # Check address after convert ergo tree that would have existed in the wallet_address
-                elif data_node.get('response')['address'] in wallet_address:
+                if output['ergoTree'] == ergo_tree:
                     value = value + output['value']
 
         return value
@@ -395,38 +418,25 @@ class ValidationSerializer(serializers.Serializer):
         tx_id = self.__validate_transaction_node(attrs)
         response['tx_id'] = tx_id
 
-        logger.info("Getting wallet addresses to validate transaction.")
-        # Send request to node for get list of wallet addresses
-        data_node = General.node_request('wallet/addresses',
-                                         {'accept': 'application/json', 'content-type': 'application/json',
-                                          'api_key': API_KEY})
-        if data_node['status'] == 'External Error':
-            logger.error('error while getting wallet addresses, {}.'.format(data_node))
-            raise ValidationError({
-                "message": data_node['response'],
-                "status": "failed"
-            })
-        else:
-            wallet_address = data_node.get('response')
-            # Calculate value of payed in transaction
-            value = self.__value_of_transaction(wallet_address, transaction)
-            # Sum value of output field should be bigger than reward policy pool.
-            REWARD_FACTOR = self.configs.REWARD_FACTOR
-            PRECISION = self.configs.REWARD_FACTOR_PRECISION
-            TOTAL_REWARD = round((self.configs.TOTAL_REWARD / 1e9) * REWARD_FACTOR, PRECISION)
-            TOTAL_REWARD = int(TOTAL_REWARD * 1e9)
+        # Calculate value of payed in transaction
+        value = self.__value_of_transaction(transaction)
+        # Sum value of output field should be bigger than reward policy pool.
+        REWARD_FACTOR = self.configs.REWARD_FACTOR
+        PRECISION = self.configs.REWARD_FACTOR_PRECISION
+        TOTAL_REWARD = round((self.configs.TOTAL_REWARD / 1e9) * REWARD_FACTOR, PRECISION)
+        TOTAL_REWARD = int(TOTAL_REWARD * 1e9)
 
-            logger.info('needed erg to validate tx is {}, got {}'.format(TOTAL_REWARD, value))
-            if value >= TOTAL_REWARD:
-                logger.info('value of tx is ok.')
-                response['status'] = 'valid'
-                response['message'] = "Transaction is valid"
-            else:
-                logger.error('value of tx is not valid, rejecting.')
-                raise ValidationError({
-                    "message": "invalid output pool addresses or invalid amount.",
-                    "status": "invalid"
-                })
+        logger.info('needed erg to validate tx is {}, got {}'.format(TOTAL_REWARD, value))
+        if value >= TOTAL_REWARD:
+            logger.info('value of tx is ok.')
+            response['status'] = 'valid'
+            response['message'] = "Transaction is valid"
+        else:
+            logger.error('value of tx is not valid, rejecting.')
+            raise ValidationError({
+                "message": "invalid output pool addresses or invalid amount.",
+                "status": "invalid"
+            })
         attrs.update(response)
         return attrs
 

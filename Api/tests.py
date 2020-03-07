@@ -678,11 +678,11 @@ class TestValidation(TransactionTestCase):
                 "status": "success",
                 "response": ["3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"]
             }
-        elif "utils/ergoTreeToAddress/" in args[0]:
+        elif "script/addressToTree/3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM" in args[0]:
             return {
                 "status": "success",
                 "response": {
-                    "address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"
+                    "tree": "0008cd0314d842b4a3dd0d3c4ecda472365b07f2f61f723f61113db131f3fdaab02df1e6"
                 }
             }
         elif args[0] == "info":
@@ -740,11 +740,11 @@ class TestValidation(TransactionTestCase):
                 "status": "success",
                 "response": ["3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"]
             }
-        elif "utils/ergoTreeToAddress/" in args[0]:
+        elif "script/addressToTree/3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM" in args[0]:
             return {
                 "status": "success",
                 "response": {
-                    "address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"
+                    "tree": "0008cd0314d842b4a3dd0d3c4ecda472365b07f2f61f723f61113db131f3fdaab02df1e6"
                 }
             }
         elif args[0] == "info":
@@ -882,17 +882,16 @@ class TestValidation(TransactionTestCase):
                     "detail": "blah blah Every input of the transaction should be in UTXO blah blah"
                 }
             }
-
         elif args[0] == "wallet/addresses":
             return {
                 "status": "success",
                 "response": ["3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"]
             }
-        elif "utils/ergoTreeToAddress/" in args[0]:
+        elif "script/addressToTree/3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM" in args[0]:
             return {
                 "status": "success",
                 "response": {
-                    "address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"
+                    "tree": "0008cd0314d842b4a3dd0d3c4ecda472365b07f2f61f723f61113db131f3fdaab02df1e6"
                 }
             }
         elif args[0] == "info":
@@ -981,11 +980,11 @@ class TestValidation(TransactionTestCase):
                 "status": "success",
                 "response": ["3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"]
             }
-        elif "utils/ergoTreeToAddress/" in args[0]:
+        elif "script/addressToTree/3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM" in args[0]:
             return {
                 "status": "success",
                 "response": {
-                    "address": "3WwYLP3oDYogUc8x9BbcnLZvpVqT5Zc77RHjoy19PyewAJMy9aDM"
+                    "tree": "0008cd0314d842b4a3dd0d3c4ecda472365b07f2f61f723f61113db131f3fdaab02df1e6"
                 }
             }
         elif args[0] == "info":
