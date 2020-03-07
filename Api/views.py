@@ -14,6 +14,7 @@ from Api.utils.general import General, modify_pagination
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL")
 ACCOUNTING_HOST = getattr(settings, "ACCOUNTING_HOST")
 SHARE_CHUNK_SIZE = getattr(settings, "SHARE_CHUNK_SIZE", 10)
+WALLET_ADDRESS = getattr(settings, "WALLET_ADDRESS")
 
 
 logger = logging.getLogger(__name__)
@@ -44,12 +45,14 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet,
         PRECISION = configs.REWARD_FACTOR_PRECISION
         REWARD = round((configs.TOTAL_REWARD / 1e9) * configs.REWARD_FACTOR, PRECISION)
         REWARD = int(REWARD * 1e9)
-        data_node = General.node_request('wallet/addresses',
-                                         {'accept': 'application/json', 'api_key': settings.API_KEY})
-        if data_node['status'] == '400':
-            return data_node
-        else:
-            wallet_address = data_node.get('response')[0]
+        wallet_address = WALLET_ADDRESS
+        if wallet_address is None:
+            data_node = General.node_request('wallet/addresses',
+                                             {'accept': 'application/json', 'api_key': settings.API_KEY})
+            if data_node['status'] == '400':
+                return data_node
+            else:
+                wallet_address = data_node.get('response')[0]
         return {
             'reward': REWARD,
             'wallet_address': wallet_address,
