@@ -8,3 +8,4 @@ ErgoApi/production.py
 static/*
 .important.log
 .coverage
+htmlcov/*
