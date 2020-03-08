@@ -21,6 +21,11 @@ DATABASES = {
 # Address Node (ex: "http://127.0.0.1:9053/")
 NODE_ADDRESS = "Address Node"
 
+# to avoid getting wallet addresses every time
+WALLET_ADDRESS = None
+# to avoid converting wallet address to ergo tree every time
+WALLET_ADDRESS_TREE = None
+
 # Explorer ergo (ex :"https://api.ergoplatform.com/")
 ERGO_EXPLORER_ADDRESS = "Address Ergo_Explorer"
 
@@ -83,3 +88,6 @@ NUMBER_OF_LOG = 100
 
 # set your approprate broker url, e.g, rabbitmq or redis
 CELERY_BROKER_URL = 'amqp://guest:guest@localhost:5672//'
+
+# shares chunk size
+SHARE_CHUNK_SIZE = 10

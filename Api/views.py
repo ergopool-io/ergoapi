@@ -1,182 +1,23 @@
-import os
-from pydoc import locate
+import logging
+from urllib.parse import urljoin
 
 import requests
 from django.conf import settings
-from django.shortcuts import render
-from django.views import View
 from rest_framework import viewsets, mixins, status
 from rest_framework.response import Response
-from rest_framework import filters
-from rest_framework.authentication import SessionAuthentication, TokenAuthentication
-from rest_framework.permissions import IsAuthenticated
-import logging
-from urllib.parse import urljoin, urlencode, urlparse, parse_qsl, urlunparse
 from rest_framework.views import APIView
 
 from Api import serializers
-from Api.models import Block, Configuration, CONFIGURATION_DEFAULT_KEY_VALUE, CONFIGURATION_KEY_CHOICE, \
-    CONFIGURATION_KEY_TO_TYPE
-from Api.utils.general import General, modify_pagination
 from Api.tasks import ValidateShareTask
+from Api.utils.general import General, modify_pagination
 
 ACCOUNTING = getattr(settings, "ACCOUNTING_URL")
 ACCOUNTING_HOST = getattr(settings, "ACCOUNTING_HOST")
+SHARE_CHUNK_SIZE = getattr(settings, "SHARE_CHUNK_SIZE", 10)
+WALLET_ADDRESS = getattr(settings, "WALLET_ADDRESS")
+
 
 logger = logging.getLogger(__name__)
-
-
-class AccountView(View):
-    def get(self, request, public_key=""):
-        url = os.path.join(ACCOUNTING, "dashboard/")
-        if public_key:
-            url += public_key + "/"
-        try:
-            content = requests.get(url).json()
-            user_content = content.get("users", {}).get(public_key, {})
-        except:
-            content, user_content = {}, {}
-        return render(request, 'dashboard.html', {
-            'public_key': public_key,
-            "content": content,
-            "user_content": user_content
-        })
-
-
-class ShareView(viewsets.GenericViewSet,
-                mixins.CreateModelMixin):
-    serializer_class = serializers.ShareSerializer
-
-    def get_queryset(self):
-        return None
-
-    def create(self, request, *args, **kwargs):
-        data = request.data
-        if not isinstance(data, list):
-            data = [data]
-        if len(data) > Configuration.objects.SHARE_CHUNK_SIZE:
-            return Response({
-                "status": "error",
-                "message": "too big chunk"
-            }, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
-        serializer = self.get_serializer(data=data, many=True)
-        serializer.is_valid(raise_exception=True)
-        shares = serializer.validated_data
-        response = []
-        for share in shares:
-            url = os.path.join(ACCOUNTING, "shares/")
-            response.append(requests.post(url, json={
-                "miner": share.get("pk"),
-                "share": share.get("share"),
-                "status": share.get("status"),
-                "difficulty": share.get("difficulty"),
-                "transaction_id": share.get("tx_id"),
-                "block_height": share.get("headers_height"),
-            }).json())
-        headers = self.get_success_headers(serializer.data)
-        return Response(response, status=status.HTTP_201_CREATED, headers=headers)
-
-
-class HeaderView(viewsets.GenericViewSet,
-                 mixins.CreateModelMixin):
-    serializer_class = serializers.ProofSerializer
-
-    def get_queryset(self):
-        return None
-
-    def perform_create(self, serializer):
-        pass
-
-
-class TransactionView(viewsets.GenericViewSet, mixins.CreateModelMixin):
-    serializer_class = serializers.TransactionSerializer
-
-    def get_queryset(self):
-        return None
-
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        share = serializer.validated_data
-        headers = self.get_success_headers(serializer.data)
-        # Check if block would have existed update tx_id else set public_key of miner then set tx_id.
-        block = Block.objects.filter(public_key=share.get("pk").lower()).first()
-        if not block:
-            block = Block(public_key=share.get("pk").lower())
-        block.tx_id = share.get("tx_id")
-        block.save()
-        logger.info('Saved or updated the block for pk {}'.format(share.get('pk')))
-        return Response({'message': share.get("message")}, status=status.HTTP_201_CREATED, headers=headers)
-
-
-class ConfigurationViewSet(viewsets.GenericViewSet,
-                           mixins.CreateModelMixin,
-                           mixins.ListModelMixin):
-    # For session authentication
-    authentication_classes = [SessionAuthentication, TokenAuthentication]
-    # For token authentication
-    permission_classes = (IsAuthenticated,)
-    serializer_class = serializers.ConfigurationSerializer
-    queryset = Configuration.objects.all()
-    filter_backends = (filters.SearchFilter,)
-    search_fields = ('key', 'value',)
-
-    def perform_create(self, serializer, *args, **kwargs):
-        """
-        we override the perform_create to create a new configuration
-        or update an existing configuration.
-        :param serializer:
-        :param args:
-        :param kwargs:
-        :return:
-        """
-        key = serializer.validated_data['key']
-        value = serializer.validated_data['value']
-        if key in [x[0] for x in CONFIGURATION_KEY_CHOICE]:
-            val_type = CONFIGURATION_KEY_TO_TYPE[key]
-            try:
-                locate(val_type)(value)
-
-            except:
-                return
-
-            configurations = Configuration.objects.filter(key=key)
-            if not configurations:
-                serializer.save()
-            else:
-                configuration = Configuration.objects.get(key=key)
-                configuration.value = value
-                configuration.save()
-
-        try:
-            if key in serializer.accounting_choices:
-                requests.post(urljoin(ACCOUNTING, 'conf/'), data={'key': key, 'value': value})
-
-        except requests.exceptions.RequestException:
-            logger.critical('Could not connect to accounting!')
-
-    def list(self, request, *args, **kwargs):
-        """
-        overrides list method to return list of key: value instead of list of dicts
-        """
-        configs = dict(CONFIGURATION_DEFAULT_KEY_VALUE)
-        for conf in Configuration.objects.all():
-            val_type = CONFIGURATION_KEY_TO_TYPE[conf.key]
-            configs[conf.key] = locate(val_type)(conf.value)
-
-        res = None
-        try:
-            res = requests.get(urljoin(ACCOUNTING, 'conf/'))
-
-        except requests.exceptions.RequestException:
-            logger.critical('Could not connect to accounting!')
-
-        if res and res.status_code == status.HTTP_200_OK:
-            res = res.json()
-            for key, value in res.items():
-                configs[key] = value
-
-        return Response(configs, status=status.HTTP_200_OK)
 
 
 class ConfigurationValueViewSet(viewsets.GenericViewSet,
@@ -188,42 +29,35 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet,
     """
     serializer_class = serializers.ConfigurationValueSerializer
 
-    def get_queryset(self):
-        return None
-
     def list(self, request, *args, **kwargs):
-        return Response(self.get_response())
+        return Response(self.get_response(request.configs))
 
     def retrieve(self, request, *args, **kwargs):
-        return Response(self.get_response(kwargs.get("pk").lower()))
+        return Response(self.get_response(request.configs, pk=kwargs.get("pk").lower()))
 
     @staticmethod
-    def get_response(pk=None):
+    def get_response(configs, pk=None):
         """
         get configuration for json.
         :param pk: if this parameter set return list miner specific configuration otherwise return general configuration
         :return: a json contain all configuration
         """
-        result = dict(CONFIGURATION_DEFAULT_KEY_VALUE)
-        config = Configuration.objects.all()
-        for x in config.values_list('key', flat=True):
-            val_type = CONFIGURATION_KEY_TO_TYPE[x]
-            result[x] = locate(val_type)(config.get(key=x).value)
-
-        PRECISION = Configuration.objects.REWARD_FACTOR_PRECISION
-        REWARD = round((result['TOTAL_REWARD'] / 1e9) * result['REWARD_FACTOR'], PRECISION)
+        PRECISION = configs.REWARD_FACTOR_PRECISION
+        REWARD = round((configs.TOTAL_REWARD / 1e9) * configs.REWARD_FACTOR, PRECISION)
         REWARD = int(REWARD * 1e9)
-        data_node = General.node_request('wallet/addresses',
-                                         {'accept': 'application/json', 'api_key': settings.API_KEY})
-        if data_node['status'] == '400':
-            return data_node
-        else:
-            wallet_address = data_node.get('response')[0]
+        wallet_address = WALLET_ADDRESS
+        if wallet_address is None:
+            data_node = General.node_request('wallet/addresses',
+                                             {'accept': 'application/json', 'api_key': settings.API_KEY})
+            if data_node['status'] == '400':
+                return data_node
+            else:
+                wallet_address = data_node.get('response')[0]
         return {
             'reward': REWARD,
             'wallet_address': wallet_address,
-            'pool_base_factor': result['POOL_BASE_FACTOR'],
-            'max_chunk_size': result['SHARE_CHUNK_SIZE'],
+            'pool_base_factor': configs.POOL_BASE_FACTOR,
+            'max_chunk_size': SHARE_CHUNK_SIZE,
         }
 
 
@@ -231,19 +65,21 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
     serializer_class = serializers.ValidationSerializer
 
     def create(self, request, *args, **kwargs):
+        configs = request.configs
         data = request.data
-        if len(data.get('shares', [])) > Configuration.objects.SHARE_CHUNK_SIZE:
+        if len(data.get('shares', [])) > SHARE_CHUNK_SIZE:
             return Response({
                 "status": "error",
                 "message": "too big chunk"
             }, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+
+        logger.info('received a share chunk of size {}.'.format(len(data.get('shares', []))))
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         # Get ip of the client that send request
         client_ip = request.META.get('HTTP_X_REAL_IP')
 
-        logger.debug("Tasks run for validate shares")
         for share in data.get('shares', []):
             ValidateShareTask.delay(data['pk'],
                                     share.get('w'),
@@ -253,7 +89,10 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
                                     data['transaction']['id'],
                                     data['proof']['block'],
                                     data['addresses'],
-                                    client_ip)
+                                    client_ip,
+                                    configs.POOL_BASE_FACTOR)
+
+        logger.info("tasks created for each share.")
         return Response({'status': 'OK'}, status=status.HTTP_200_OK)
 
 
@@ -261,18 +100,34 @@ class DefaultView(APIView):
     """
     sends every api requests that is not previously matched to accounting.
     """
-
     def send_request(self, request, url, method_name):
-        client_ip = request.META.get('REMOTE_ADDR')
+        client_ip = request.META.get('REMOTE_ADDR', '')
+        request_headers = dict(request.headers)
+        request_headers = {key.lower(): val for key, val in request_headers.items()}
         headers = {'source-ip': client_ip}
+        to_add_headers = ['cookie', 'authorization']
+        for item in to_add_headers:
+            if item in request_headers.keys():
+                headers.update({item: request_headers[item]})
+
         method = getattr(requests, method_name)
-        response = method(urljoin(ACCOUNTING, url + '/'), data=request.data,
-                          headers=headers, params=dict(request.query_params))
+        response = None
         try:
-            result = modify_pagination(request, response.json())
+            response = method(urljoin(ACCOUNTING, url + '/'), data=request.data,
+                              headers=headers, params=dict(request.query_params))
+            try:
+                result = modify_pagination(request, response.json())
+                return Response(result, status=response.status_code)
+
+            except:
+                return Response(response.json(), status=response.status_code)
+
         except:
-            result = response.content
-        return Response(result, status=response.status_code)
+            if response:
+                logger.critical('Could not connect to accounting!, {}, {}'.format(response, response.content))
+            else:
+                logger.critical('Could not connect to accounting!, {}'.format(response))
+            return Response({'message': 'could not connect to accounting!'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def get(self, request, url=None):
         return self.send_request(request, url, 'get')
@@ -280,7 +135,7 @@ class DefaultView(APIView):
     def post(self, request, url=None):
         return self.send_request(request, url, 'post')
 
-    def options(self, request, url=None):
+    def options(self, request, url=None, **kwargs):
         return self.send_request(request, url, 'options')
 
     def delete(self, request, url=None):
