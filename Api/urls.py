@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 router = routers.DefaultRouter()
 router.register(r'validation', views.ValidationView, basename='Validation')
 router.register(r'config/value', views.ConfigurationValueViewSet, basename='Config Value')
+router.register(r'support', views.SupportViewSet, basename='Support')
 
 urlpatterns = [
     path('api/', include(router.urls)),

@@ -6,6 +6,7 @@ from urllib.parse import urljoin, urlparse, urlunparse
 import requests
 
 from ErgoApi.settings import NODE_ADDRESS, API_KEY, ACCOUNTING_URL
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,13 @@ class General:
             response = {'status': 'error', 'message': 'Can not resolve response from node'}
             raise Exception(response)
 
+    @staticmethod
+    def verify_recaptcha(recaptcha_code):
+        print('xxxx')
+        url = "https://www.google.com/recaptcha/api/siteverify"
+        post_data = {"secret": settings.RECAPTCHA_SECRET, "response": recaptcha_code}
+        response = requests.post(url, data=post_data)
+        return response["success"]
 
 def modify_pagination(request, result):
     if 'next' in result:

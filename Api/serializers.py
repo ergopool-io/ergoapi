@@ -478,3 +478,15 @@ class ValidationSerializer(serializers.Serializer):
 
     class Meta:
         fields = ['pk', 'addresses', 'transaction', 'proof', 'shares']
+
+
+class SupportSerializer(serializers.Serializer):
+    recaptcha_code = serializers.CharField(label="recaptcha code")
+    name = serializers.CharField(required=False)
+    email = serializers.EmailField()
+    subject = serializers.CharField(required=False)
+    message = serializers.CharField()
+
+    def validate_recaptcha_code(self, value):
+        if not General.verify_recaptcha(value):
+            raise ValidationError("please verify recaptcha code")

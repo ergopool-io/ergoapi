@@ -3,6 +3,7 @@ from urllib.parse import urljoin
 
 import requests
 from django.conf import settings
+from django.core.mail import send_mail
 from rest_framework import viewsets, mixins, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -15,7 +16,7 @@ ACCOUNTING = getattr(settings, "ACCOUNTING_URL")
 ACCOUNTING_HOST = getattr(settings, "ACCOUNTING_HOST")
 SHARE_CHUNK_SIZE = getattr(settings, "SHARE_CHUNK_SIZE", 10)
 WALLET_ADDRESS = getattr(settings, "WALLET_ADDRESS")
-
+EMAIL_ADDRESS = getattr(settings, "EMAIL_ADDRESS")
 
 logger = logging.getLogger(__name__)
 
@@ -146,3 +147,35 @@ class DefaultView(APIView):
 
     def patch(self, request, url=None):
         return self.send_request(request, url, 'patch')
+
+
+class SupportViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin, mixins.ListModelMixin):
+    """
+    a API for send information of support form to admin system email.
+    """
+    serializer_class = serializers.SupportSerializer
+
+    def list(self, request, *args, **kwargs):
+        """
+        return site_key for RECAPTCHA.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        return Response({"site_key": settings.RECAPTCHA_SITE_KEY})
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        headers = self.get_success_headers(serializer.data)
+        data = serializer.data
+        # Create message for send to admin system
+        message = "Name: %s\nEmail:%s\nMessage:%s" % (data.get('name'), data.get('email'), data.get('message'))
+        try:
+            send_mail('Support-Email: ' + data.get('subject'), message, EMAIL_ADDRESS, [EMAIL_ADDRESS, ])
+        except:
+            logger.debug("failed send email to admin system.")
+            return Response({'message': 'failed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR, headers=headers)
+        logger.info("send information of form support to admin system")
+        return Response({'message': 'ok'}, status=status.HTTP_200_OK, headers=headers)
