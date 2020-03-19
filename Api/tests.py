@@ -1564,7 +1564,7 @@ class TestSupport(TestCase):
         in this test should be get RECAPTCHA_SITE_KEY
         :return:
         """
-        response = self.client.get('/support/').json()
+        response = self.client.get('/api/support/').json()
         self.assertEqual(response.get('site_key'), self.RECAPTCHA_SITE_KEY)
 
     @patch('Api.utils.general.General.verify_recaptcha', return_value={'success': True})
