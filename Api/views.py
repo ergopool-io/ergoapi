@@ -49,7 +49,7 @@ class ConfigurationValueViewSet(viewsets.GenericViewSet,
         if wallet_address is None:
             data_node = General.node_request('wallet/addresses',
                                              {'accept': 'application/json', 'api_key': settings.API_KEY})
-            if data_node['status'] == '400':
+            if data_node['status'] != 'success':
                 return data_node
             else:
                 wallet_address = data_node.get('response')[0]
