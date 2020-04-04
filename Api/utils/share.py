@@ -263,7 +263,6 @@ class ValidateShare(General, celery.Task):
                     'pow_identity': pow_identity
                 })
             elif share['status'] == 'valid':
-                block.pop('height', None)
                 share.update({
                     'block': block,
                     'addresses': addresses
