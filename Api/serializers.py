@@ -125,7 +125,10 @@ class ValidateProofSerializer(serializers.Serializer):
             url = urljoin(ERGO_EXPLORER_ADDRESS, 'stats/forks')
             query = {'fromHeight': height - self.configs.THRESHOLD_HEIGHT}
             response = requests.get(url, query)
-            block_chain = response.json()
+            if response.status_code == 200:
+                block_chain = response.json()
+            else:
+                raise ValidationError("could not get forks from explorer.")
             for fork in block_chain.get('forks')[::-1]:
                 for number, member in enumerate(fork['members']):
                     if parent_id == member[1]:
@@ -139,8 +142,9 @@ class ValidateProofSerializer(serializers.Serializer):
                         return ','.join(str(10 - (height - fork.get('branchPointHeight')))
                                         + str(ind + 1) + str(number + 1))
             return '-1'
-        except ValidationError as e:
+        except (ValidationError, requests.exceptions.RequestException) as e:
             logger.error("Can not resolve response from Ergo Explorer")
+            logger.error(e)
             return '-1'
 
     def validate(self, attrs):
