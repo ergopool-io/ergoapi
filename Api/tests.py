@@ -304,6 +304,7 @@ class TestValidateShare(TransactionTestCase):
                 "height": 1234,
                 "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
                 "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"],
+                "path": '-1'
             },
             "addresses": {
                 "miner": "test",
@@ -327,14 +328,16 @@ class TestValidateShare(TransactionTestCase):
             "block": {
                 "height": 1234,
                 "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
-                "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
+                "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"],
+                "path": '-1'
             },
             "addresses": {
                 "miner": "test",
                 "lock": "test",
                 "withdraw": "test"
             },
-            "client_ip": '127.0.0.1'
+            "client_ip": '127.0.0.1',
+            'pow_identity': 'e1945de077147d2473522e724f35f9188c5797e879b695fb969b1292a15fb21f'
         })])
 
     @patch("requests.get", side_effect=mocked_requests_get)
