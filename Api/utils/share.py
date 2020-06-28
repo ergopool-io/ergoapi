@@ -172,24 +172,29 @@ class ValidateShare(General, celery.Task):
         try:
             url = urljoin(ACCOUNTING, "shares/")
             logger.info('posting share to accounting.')
-            response = requests.post(url, json={
-                        "miner": share.get("miner"),
-                        "share": share.get("share"),
-                        "status": share.get("status"),
-                        "difficulty": share.get("difficulty"),
-                        "transaction_id": share.get("transaction_id"),
-                        "block_height": share.get("block").get('height'),
-                        "parent_id": share.get("block").get('parent'),
-                        "next_ids": share.get("block").get('next'),
-                        "path": share.get("block").get("path"),
-                        "miner_address": share.get("addresses").get("miner"),
-                        "lock_address": share.get("addresses").get("lock"),
-                        "withdraw_address": share.get("addresses").get("withdraw"),
-                        "client_ip": share.get("client_ip")
-                        })
-            if response.status_code != 200:
-                logger.error('got and non 200 response from accounting when posting share, {}, {}'.
-                             format(response,response.content))
+            data_input = {
+                "miner": share.get("miner"),
+                "share": share.get("share"),
+                "status": share.get("status"),
+                "difficulty": share.get("difficulty"),
+                "transaction_id": share.get("transaction_id"),
+                "block_height": share.get("block", {}).get('height'),
+                "parent_id": share.get("block", {}).get('parent'),
+                "next_ids": share.get("block", {}).get('next'),
+                "path": share.get("block", {}).get("path"),
+                "miner_address": share.get("addresses", {}).get("miner"),
+                "lock_address": share.get("addresses", {}).get("lock"),
+                "withdraw_address": share.get("addresses", {}).get("withdraw"),
+                "client_ip": share.get("client_ip"),
+                "pow_identity": share.get("pow_identity")
+            }
+            response = requests.post(url, json=data_input)
+            if not 200 <= response.status_code <= 299:
+                logger.error('got and non 200 response from accounting when posting share {}, {}, {}'.format(
+                    data_input,
+                    response.status_code,
+                    response.json())
+                )
             return {'status': 'ok'}
         except requests.exceptions.RequestException as e:
             logger.error('error while posting share to accounting, {}'.format(e))
@@ -237,14 +242,30 @@ class ValidateShare(General, celery.Task):
                 p2 = decode(w, "hex")
                 message = decode(msg, "hex")
             except ValueError as e:
-                logger.error("share input parameters aren't valid, {}.".format(e))
+                logger.debug("share input parameters aren't valid, {}.".format(e))
                 raise ValidationError({'status': 'invalid'})
+            logger.debug('Share is : {}'.format({
+                "share": share_id,
+                "pk": pk,
+                "w": w,
+                "n": n,
+                "d": d,
+                "msg": msg
+            }))
             # Validate solved or valid or invalid (d > pool difficulty)
-            logger.info('Validating difficulty for share with pk {}.'.format(pk))
+            logger.info('Validating difficulty for share {} with pk {}.'.format(share_id, pk))
             flag = self.__validate_difficulty(d, difficulty)
-            logger.info('Difficulty validation result for share with pk {}.'.format(pk))
+            logger.debug(
+                'Difficulty validation result for share with pk {} and share {} is {}'.format(pk, share_id, flag)
+            )
             # validate_right_left
+            logger.info('Validating left adn right for share {} with pk {}.'.format(share_id, pk))
             validation = self.__validate_right_left(message, nonce, p1, p2, d)
+            logger.debug(
+                'Validation left and right result for share with pk {} and share {} is {}'.format(
+                    pk, share_id, validation
+                )
+            )
             # ValidateBlock
             if validation == 1 and flag == 1:
                 share['status'] = "solved"
@@ -252,10 +273,10 @@ class ValidateShare(General, celery.Task):
                 share['status'] = 'valid'
             else:
                 share['status'] = 'invalid'
-            logger.info('Share status with pk {}: {}'.format(pk, share['status']))
+            logger.info('Share status with pk {} and share {} is: {}'.format(pk, share_id, share['status']))
+            # pow identity
+            pow_identity = self.blake((w + n + str(d)).encode('utf-8'), 'hex')
             if share['status'] == 'solved':
-                # pow identity
-                pow_identity = self.blake((w + n + str(d)).encode('utf-8'), 'hex')
                 share.update({
                     'transaction_id': tx_id,
                     'block': block,
@@ -263,10 +284,10 @@ class ValidateShare(General, celery.Task):
                     'pow_identity': pow_identity
                 })
             elif share['status'] == 'valid':
-                block.pop('height', None)
                 share.update({
                     'block': block,
-                    'addresses': addresses
+                    'addresses': addresses,
+                    'pow_identity': pow_identity
                               })
         except ValidationError as e:
             share['status'] = e.args[0]['status']
