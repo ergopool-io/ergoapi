@@ -10,6 +10,17 @@ from ErgoApi.settings import NODE_ADDRESS, API_KEY, ACCOUNTING_URL
 logger = logging.getLogger(__name__)
 
 
+def lower_json(x):
+    if isinstance(x, list):
+        return [lower_json(v) for v in x]
+    elif isinstance(x, dict):
+        return dict((k, lower_json(v)) for k, v in x.items())
+    elif hasattr(x, 'lower'):
+        return x.lower()
+    else:
+        return x
+
+
 class General:
     @staticmethod
     def blake(data, kind='byte'):
@@ -22,7 +33,7 @@ class General:
         return blake2b(data, digest_size=32).hexdigest() if kind == "hex" else blake2b(data, digest_size=32).digest()
 
     @staticmethod
-    def node_request(api, header=None, data=None, params=None, request_type="get"):
+    def node_request(api, header=None, data=None, params=None, request_type="get", lower=False):
         """
         Function for request to node
         :param api: string
@@ -30,6 +41,7 @@ class General:
         :param data: For request post use this
         :param request_type: For select ypt of request get or post
         :param params: query string
+        :param lower: normal or lower output for string
         :return: response of request
         """
         if header is None:
@@ -52,7 +64,7 @@ class General:
                 kwargs["params"] = params
             # call requests method according to request_type
             response = getattr(requests, request_type)(urljoin(NODE_ADDRESS, api), **kwargs)
-            response_json = response.json()
+            response_json = response.json() if not lower else lower_json(response.json())
             # check status code 2XX range is success
             return {
                 "response": response_json,
