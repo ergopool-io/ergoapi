@@ -883,7 +883,7 @@ class TestValidation(TransactionTestCase):
             return {
                 "status": "External Error",
                 "response": {
-                    "detail": "blah blah Every input of the transaction should be in UTXO blah blah"
+                    "detail": "blah blah every input of the transaction should be in utxo blah blah"
                 }
             }
         elif args[0] == "wallet/addresses":
@@ -975,7 +975,7 @@ class TestValidation(TransactionTestCase):
             return {
                 "status": "External Error",
                 "response": {
-                    "detail": "blah blah Scripts of all transaction inputs should pass verification blah blah"
+                    "detail": "blah blah scripts of all transaction inputs should pass verification blah blah"
                 }
             }
 
