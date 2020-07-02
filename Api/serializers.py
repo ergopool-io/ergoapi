@@ -116,7 +116,7 @@ class ValidateProofSerializer(serializers.Serializer):
         try:
             block_chain = General.node_request('/blocks/chainSlice?fromHeight=%s&toHeight=%s' %
                                                (str(height - self.configs.THRESHOLD_HEIGHT), str(height)),
-                                               {'accept': 'application/json'})
+                                               {'accept': 'application/json'}, lower=True)
             for i, block in enumerate(block_chain.get('response')):
                 if block['id'] == parent_id:
                     return str(i + 1)
@@ -131,7 +131,7 @@ class ValidateProofSerializer(serializers.Serializer):
                 raise ValidationError("could not get forks from explorer.")
             for fork in block_chain.get('forks')[::-1]:
                 for number, member in enumerate(fork['members']):
-                    if parent_id == member[1]:
+                    if parent_id == member[1].lower():
                         forks = General.node_request('/blocks/at/{}'.format(fork['branchPointHeight']),
                                                      {'accept': 'application/json'})
                         if forks['status'] != 'success':
@@ -146,6 +146,30 @@ class ValidateProofSerializer(serializers.Serializer):
             logger.error("Can not resolve response from Ergo Explorer")
             logger.error(e)
             return '-1'
+
+    def validate_msg_pre_image(self, value):
+        try:
+            return value.lower()
+        except ValueError as e:
+            logger.error("Proof input msg_pre_image is not valid.")
+            logger.error(e)
+            raise ValidationError("Proof input msg_pre_image is not valid.")
+
+    def validate_leaf(self, value):
+        try:
+            return value.lower()
+        except ValueError as e:
+            logger.error("Proof input leaf is not valid.")
+            logger.error(e)
+            raise ValidationError("Proof input leaf is not valid.")
+
+    def validate_levels(self, value):
+        try:
+            return [i.lower() for i in value]
+        except ValueError as e:
+            logger.error("Proof input levels is not valid.")
+            logger.error(e)
+            raise ValidationError("Proof input levels is not valid.")
 
     def validate(self, attrs):
         """
@@ -195,7 +219,12 @@ class ValidateProofSerializer(serializers.Serializer):
             raise ValidationError({'message': 'The proof is invalid.', 'status': 'invalid'})
 
         # Set parent and next block of candidate block
-        block_next = General.node_request('/blocks/at/{}'.format(str(header.height)), {'accept': 'application/json'})
+        block_next = General.node_request(
+            '/blocks/at/{}'.format(str(header.height)),
+            {'accept': 'application/json'},
+            lower=True
+        )
+
         block = {
             'height': header.height,
             'parent': header.parentId.hex(),
@@ -237,6 +266,22 @@ class ValidationShareSerializer(serializers.Serializer, General):
             logger.error("Share input d is not valid.")
             logger.error(e)
             raise ValidationError("invalid number entered")
+
+    def validate_w(self, value):
+        try:
+            return value.lower()
+        except ValueError as e:
+            logger.error("Share input w is not valid.")
+            logger.error(e)
+            raise ValidationError("Share input w is not valid.")
+
+    def validate_nonce(self, value):
+        try:
+            return value.lower()
+        except ValueError as e:
+            logger.error("Share input nonce is not valid.")
+            logger.error(e)
+            raise ValidationError("Share input nonce is not valid.")
 
     def update(self, instance, validated_data):
         pass
@@ -292,7 +337,7 @@ class ValidationSerializer(serializers.Serializer):
 
         # Send request to node for validate transaction
         tx_id = None
-        data_node = General.node_request('transactions/check', data=transaction, request_type="post")
+        data_node = General.node_request('transactions/check', data=transaction, request_type="post", lower=True)
         node_ok = False
         if data_node['status'] == 'success':
             logger.info('tx was validated by node, response: {}.'.format(data_node['response']))
@@ -304,8 +349,8 @@ class ValidationSerializer(serializers.Serializer):
         if data_node['status'] == 'External Error':
             logger.info('tx was not verified with node.')
             node_result = data_node['response']
-            required_msg_custom = 'Scripts of all transaction inputs should pass verification'
-            required_msg_mined = 'Every input of the transaction should be in UTXO'
+            required_msg_custom = 'scripts of all transaction inputs should pass verification'
+            required_msg_mined = 'every input of the transaction should be in utxo'
             if 'detail' in node_result and required_msg_custom in node_result['detail']:
                 logger.info('trying custom verifier to verify tx.')
                 miner_address = attrs['addresses']['miner']
@@ -333,7 +378,7 @@ class ValidationSerializer(serializers.Serializer):
 
                 height = str(header.height)
                 params = {'fromHeight': height, 'toHeight': height}
-                data_node = General.node_request('blocks/chainSlice', params=params)
+                data_node = General.node_request('blocks/chainSlice', params=params, lower=True)
 
                 logger.info('chain slice returned {}'.format(data_node))
 
@@ -365,7 +410,7 @@ class ValidationSerializer(serializers.Serializer):
                 result = res.json()
                 tx_id = result['id']
 
-        return tx_id
+        return tx_id.lower()
 
     def __value_of_transaction(self, transaction):
         ergo_tree = WALLET_ADDRESS_TREE
@@ -378,6 +423,9 @@ class ValidationSerializer(serializers.Serializer):
                 data_node = General.node_request('wallet/addresses',
                                                  {'accept': 'application/json', 'content-type': 'application/json',
                                                   'api_key': API_KEY})
+                if data_node["status"] == "External Error" or len(data_node.get('response')) == 0:
+                    raise Exception("can not get wallet address from node (maybe wallet is locked or no wallet made)")
+
                 wallet_address = data_node.get('response')[0]
                 data_node = General.node_request('script/addressToTree/' + wallet_address,
                                                  {'accept': 'application/json'})
@@ -466,6 +514,7 @@ class ValidationSerializer(serializers.Serializer):
     def validate(self, attrs):
         self.__validate_miner_address(attrs)
         self.__validate_transaction(attrs)
+        attrs['pk'] = attrs['pk'].lower()
         leaf = attrs['proof']['leaf']
         tx_id = attrs['tx_id']
         if leaf == tx_id:
