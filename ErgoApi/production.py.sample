@@ -37,7 +37,7 @@ API_KEY = "Secret Key of Node"
 
 # Access url for accounting system
 ACCOUNTING_IP = "127.0.0.1"
-ACCOUNTING_PORT = 8001
+ACCOUNTING_PORT = "8001"
 ACCOUNTING_PROTOCOL = "http"
 
 ALLOWED_HOSTS = ["127.0.0.1"]

@@ -14,6 +14,7 @@ ADD ErgoApi/ /var/www/src/ErgoApi/
 COPY manage.py /var/www/src/
 COPY config/uwsgi.ini /var/www/
 COPY config/production.py /var/www/src/ErgoApi/
+COPY script.sh /var/www/src/script.sh
 
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
