@@ -76,8 +76,8 @@ except:
     raise Exception("System configured incorrectly")
 
 # Create Accounting address
-ACCOUNTING_HOST = "%s:%d" % (ACCOUNTING_IP, ACCOUNTING_PORT)
-ACCOUNTING_URL = "%s://%s:%d/" % (ACCOUNTING_PROTOCOL, ACCOUNTING_IP, ACCOUNTING_PORT)
+ACCOUNTING_HOST = "%s:%s" % (ACCOUNTING_IP, ACCOUNTING_PORT)
+ACCOUNTING_URL = "%s://%s:%s/" % (ACCOUNTING_PROTOCOL, ACCOUNTING_IP, ACCOUNTING_PORT)
 
 # Prefix accounting service APIs that should be ignored (ex: ['conf'])
 ACCOUNTING_API_IGNORE = ['conf', 'shares']
