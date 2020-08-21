@@ -35,7 +35,7 @@ API_KEY = os.environ.get("SECRET")
 
 # Access url for accounting system
 ACCOUNTING_IP = os.environ.get("ACCOUNTING_IP")
-ACCOUNTING_PORT = int(os.environ.get("ACCOUNTING_PORT"))
+ACCOUNTING_PORT = os.environ.get("ACCOUNTING_PORT")
 ACCOUNTING_PROTOCOL = os.environ.get("ACCOUNTING_PROTOCOL")
 
 # Allowed Hosts
