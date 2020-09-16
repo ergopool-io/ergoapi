@@ -293,32 +293,9 @@ class ValidationShareSerializer(serializers.Serializer, General):
         fields = ['pk', 'w', 'nonce', 'd']
 
 
-class AddressesSerializer(serializers.Serializer):
-    miner = serializers.CharField()
-    lock = serializers.CharField()
-    withdraw = serializers.CharField()
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(args, kwargs)
-
-        request = self.context.get('request')
-        self.configs = LazyConfiguration()
-        if request is not None and request.configs is not None:
-            self.configs = request.configs
-
-    def update(self, instance, validated_data):
-        pass
-
-    def create(self, validated_data):
-        pass
-
-    class Meta:
-        fields = ['miner', 'lock', 'withdraw']
-
-
 class ValidationSerializer(serializers.Serializer):
     pk = serializers.CharField(validators=[HexValidator()])
-    addresses = AddressesSerializer(many=False)
+    miner_address = serializers.CharField()
     transaction = serializers.JSONField()
     proof = ValidateProofSerializer(many=False)
     shares = ValidationShareSerializer(many=True)
@@ -353,7 +330,7 @@ class ValidationSerializer(serializers.Serializer):
             required_msg_mined = 'every input of the transaction should be in utxo'
             if 'detail' in node_result and required_msg_custom in node_result['detail']:
                 logger.info('trying custom verifier to verify tx.')
-                miner_address = attrs['addresses']['miner']
+                miner_address = attrs['miner_address']
                 res = requests.post(urljoin(VERIFIER_ADDRESS, 'verify'), json={'minerPk': miner_address,
                                                                                'transaction': transaction})
                 if res.status_code == status.HTTP_200_OK:
@@ -494,7 +471,7 @@ class ValidationSerializer(serializers.Serializer):
 
     def __validate_miner_address(self, attr):
         pk = attr['pk']
-        miner_address = attr['addresses']['miner']
+        miner_address = attr['miner_address']
         res = requests.get(urljoin(VERIFIER_ADDRESS, 'address_to_pk'), json=miner_address)
         if res.status_code != 200:
             logger.error('got and non 200 response while getting pk out of address, {}, {}'.format(res, res.content))
@@ -530,4 +507,4 @@ class ValidationSerializer(serializers.Serializer):
         pass
 
     class Meta:
-        fields = ['pk', 'addresses', 'transaction', 'proof', 'shares']
+        fields = ['pk', 'miner_address', 'transaction', 'proof', 'shares']

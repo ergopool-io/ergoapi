@@ -51,9 +51,9 @@ class ValidateShare(General, celery.Task):
         self._base_factor = None
         self.POOL_BASE_FACTOR = None
 
-    def run(self, pk, w, nonce, d, msg, tx_id, block, addresses, client_ip, pool_base_factor, *args, **kwargs):
+    def run(self, pk, w, nonce, d, msg, tx_id, block, miner_address, client_ip, pool_base_factor, *args, **kwargs):
         self.POOL_BASE_FACTOR = pool_base_factor
-        self.validate(pk, w, nonce, d, msg, tx_id, block, addresses, client_ip)
+        self.validate(pk, w, nonce, d, msg, tx_id, block, miner_address, client_ip)
 
     def __get_base(self, difficulty):
         """
@@ -166,7 +166,7 @@ class ValidateShare(General, celery.Task):
         """
         Function for send share to Accounting service
         :param share: A json consist of miner, status, share, difficulty,
-         tx_id, headers_height, block, addresses, client_ip
+         tx_id, headers_height, block, miner_address, client_ip
         :return: status request to accounting
         """
         try:
@@ -182,9 +182,7 @@ class ValidateShare(General, celery.Task):
                 "parent_id": share.get("block", {}).get('parent'),
                 "next_ids": share.get("block", {}).get('next'),
                 "path": share.get("block", {}).get("path"),
-                "miner_address": share.get("addresses", {}).get("miner"),
-                "lock_address": share.get("addresses", {}).get("lock"),
-                "withdraw_address": share.get("addresses", {}).get("withdraw"),
+                "miner_address": share.get("miner_address"),
                 "client_ip": share.get("client_ip"),
                 "pow_identity": share.get("pow_identity")
             }
@@ -204,7 +202,7 @@ class ValidateShare(General, celery.Task):
             }
             return response
 
-    def validate(self, pk, w, n, d, msg, tx_id, block, addresses, client_ip):
+    def validate(self, pk, w, n, d, msg, tx_id, block, miner_address, client_ip):
         """
         Checks that `header` contains correct solution of the Autolykos PoW puzzle.
         :param pk: miner public key.
@@ -215,7 +213,7 @@ class ValidateShare(General, celery.Task):
         :param msg: Hash of meg_pre_image (header of block without pow)
         :param tx_id: Transaction Id
         :param block: consist parent_id and next_ids candidate block and path
-        :param addresses: address miner
+        :param miner_address: address miner
         :param client_ip: ip of client that send request
         :return:
         """
@@ -280,13 +278,13 @@ class ValidateShare(General, celery.Task):
                 share.update({
                     'transaction_id': tx_id,
                     'block': block,
-                    'addresses': addresses,
+                    'miner_address': miner_address,
                     'pow_identity': pow_identity
                 })
             elif share['status'] == 'valid':
                 share.update({
                     'block': block,
-                    'addresses': addresses,
+                    'miner_address': miner_address,
                     'pow_identity': pow_identity
                               })
         except ValidationError as e:

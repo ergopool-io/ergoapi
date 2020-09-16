@@ -1,10 +1,6 @@
 {
   "pk": "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C",
-  "addresses": {
-    "miner": "test",
-    "lock": "test",
-    "withdraw": "test"
-  },
+  "miner_address": "test",
   "proof": {
     "msg_pre_image": "01d3a0ee8c30a4243efced2d3927fc760ae102670f1d7328ee48cd3a2954e08bd2d67cd03330280f5c2ac0ce013d67c798b24688de2230a11d41b7b31036b74826784ccb1070b07c2d56d53bd994ce03cc12ff9dfa004fdd2350e9eb744c5ba0ff8a2f5a4e1d093ab3e1d17ff5618c5def2f2a7eea731ba11fbc9f0f17a6b661a8149a8094ac802e15db8041aa6d982180198d872a56b023eb161926161d8a013e66aea469f561750500e7c882fb05000000",
     "leaf": "7fdfae7a85ad26ffc838d7c6042cbfc67781e83bc846c9d652f1023dc795e30e",
