@@ -88,7 +88,7 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
                                     data['proof']['msg'],
                                     data['transaction']['id'],
                                     data['proof']['block'],
-                                    data['addresses'],
+                                    data['miner_address'],
                                     client_ip,
                                     configs.POOL_BASE_FACTOR)
 
