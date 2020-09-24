@@ -30,7 +30,8 @@ class ConfigurationValueApiTest(TransactionTestCase):
         'REWARD_FACTOR': 0.96296297,
         'SHARE_CHUNK_SIZE': 10,
         'THRESHOLD_HEIGHT': 10,
-        'THRESHOLD_TIMESTAMP': 120000
+        'THRESHOLD_TIMESTAMP': 120000,
+        'VERSION_ALGO_MINING': 1
     }
 
     returned_configs = None
@@ -172,7 +173,8 @@ class TestValidateShare(TransactionTestCase):
         'REWARD_FACTOR': 0.96296297,
         'SHARE_CHUNK_SIZE': 10,
         'THRESHOLD_HEIGHT': 10,
-        'THRESHOLD_TIMESTAMP': 120000
+        'THRESHOLD_TIMESTAMP': 120000,
+        'VERSION_ALGO_MINING': 1
     }
 
     returned_configs = None
@@ -193,7 +195,7 @@ class TestValidateShare(TransactionTestCase):
         url = args[0]
 
         if url == urljoin(ACCOUNTING_URL, 'conf/'):
-            return MockResponse(TestProofValidate.returned_configs, 200)
+            return MockResponse(TestValidateShare.returned_configs, 200)
 
     def mocked_node_request(*args, **kwargs):
         """
@@ -229,10 +231,10 @@ class TestValidateShare(TransactionTestCase):
     @patch("requests.get", side_effect=mocked_requests_get)
     @patch("Api.utils.share.ValidateShare.save_share", side_effect=mocked_account_request)
     @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
-    def test_status_solved_lesX(self, mock_node, accounting_mock, mock):
+    def test_status_solved_lesX_version_1(self, mock_node, accounting_mock, mock):
         """
         Solution
-        Check that d < b and left == right for a share solved.
+        Check that d < b and left == right for a share solved with Autolykos v1, Alg. 2, line4: m || nonce .
         """
 
         share = {
@@ -251,8 +253,8 @@ class TestValidateShare(TransactionTestCase):
             "client_ip": '127.0.0.1'
         }
 
-        configs = dict(TestProofValidate.default_configs)
-        TestProofValidate.returned_configs = configs
+        configs = dict(TestValidateShare.default_configs)
+        TestValidateShare.returned_configs = configs
 
         to_hash = share['w'] + share['nonce'] + str(share['d'])
         pow_identity = blake2b(to_hash.encode('utf-8'), digest_size=32).hexdigest()
@@ -263,6 +265,58 @@ class TestValidateShare(TransactionTestCase):
         accounting_mock.assert_has_calls([call({
             'miner': '03cd07843e1f7e25407eda2369ad644854e532e381ab30d6488970e0b87d060d16',
             'share': 'a8794c0719bbe03afe6ff4926d56d59aeb3c2438d7396b7c4c4fd5aa064288df',
+            'status': 'solved',
+            "pow_identity": pow_identity,
+            'difficulty': 1,
+            'transaction_id': '53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5',
+            'block': {
+                'height': 41496,
+                'parent': '46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48',
+                'next': ['c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03']
+            },
+            "miner_address": "test",
+            "client_ip": '127.0.0.1'
+        })])
+
+    @patch("requests.get", side_effect=mocked_requests_get)
+    @patch("Api.utils.share.ValidateShare.save_share", side_effect=mocked_account_request)
+    @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
+    def test_status_solved_lesX_version_2(self, mock_node, accounting_mock, mock):
+        """
+        Solution
+        Check that d < b and left == right for a share solved with Autolykos v2, Alg. 2, line 4: pk || w || m || nonce .
+        """
+
+        share = {
+            "pk": "02f7073f0edbb4a65e3ee6d53e112295b3b1af1af1b0829c6b716445f59c9615a8",
+            "w": "03ddf4fe8a28552be5762b793a3a9b6ec50076fd1bd00441361f6c3d04ff498967",
+            "nonce": "5a16e7ebaefb864c",
+            "d": 611931904760077820038118035192860177298076176669068504387271072414,
+            "msg": "5eb06b3c197222a6de4c855c303ef360094340ffac2ba3fb5754ed45b712d562",
+            "tx_id": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
+            "block": {
+                "height": 41496,
+                "parent": "46062b27d06c1155898ce2a04db6686a84af710135e87dfb89eaac4a32b58a48",
+                "next": ["c6f36cf7ea4a5acd51f74e021f697606e455f0b1376d95c7a102578a7a8bdb03"]
+            },
+            "miner_address": "test",
+            "client_ip": '127.0.0.1'
+        }
+
+        configs = dict(TestValidateShare.default_configs)
+        # Set version of algorithm mining => 2
+        configs['VERSION_ALGO_MINING'] = 2
+        TestValidateShare.returned_configs = configs
+
+        to_hash = share['w'] + share['nonce'] + str(share['d'])
+        pow_identity = blake2b(to_hash.encode('utf-8'), digest_size=32).hexdigest()
+
+        block = ValidateShare()
+        block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'],
+                       share['block'], share['miner_address'], share['client_ip'])
+        accounting_mock.assert_has_calls([call({
+            'miner': '02f7073f0edbb4a65e3ee6d53e112295b3b1af1af1b0829c6b716445f59c9615a8',
+            'share': '7526dad8056c5dc2f71d917d6013999a9813691666238d2200d8f2d80436e7ce',
             'status': 'solved',
             "pow_identity": pow_identity,
             'difficulty': 1,
@@ -302,8 +356,8 @@ class TestValidateShare(TransactionTestCase):
             "client_ip": '127.0.0.1'
         }
 
-        configs = dict(TestProofValidate.default_configs)
-        TestProofValidate.returned_configs = configs
+        configs = dict(TestValidateShare.default_configs)
+        TestValidateShare.returned_configs = configs
 
         block = ValidateShare()
         block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'],
@@ -349,8 +403,8 @@ class TestValidateShare(TransactionTestCase):
             "client_ip": '127.0.0.1'
         }
 
-        configs = dict(TestProofValidate.default_configs)
-        TestProofValidate.returned_configs = configs
+        configs = dict(TestValidateShare.default_configs)
+        TestValidateShare.returned_configs = configs
 
         block = ValidateShare()
         block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'],
@@ -404,17 +458,31 @@ class TestValidateShare(TransactionTestCase):
                                   23538307, 53117732, 42149055, 52740024, 12564581, 62416135, 6620933, 17237427,
                                   50705181, 28515596, 52235322, 17578593, 3826135, 39966521, 30882246])
 
-    def test_gen_element(self):
+    def test_gen_element_version_1(self):
         """
-        input function gen_element is message, pk, w, member of output gen_indexes
+        We expect that return hash with algorithm Autolykos v. 1: H(j|M|pk|m|w) (line 5 from the Algo 2 of the spec)
         """
         msg = "cfc5f330a71a99616453b18e572ee06a7e045e0c2f6cf35ce7d490572ec7a2ac".encode("ascii")
         p1 = "02385E11D92F8AC74155878EE318B8A0FC4FC1FDA9D1D48A5EC34778F55DF01C6C".encode("ascii")
         p2 = "02600D9BEEE35425E5C467A4295D49EDAEF15E22C8B2EF7E916A9BE30EC7DA3B65".encode("ascii")
         out_gen_indexes = 54118084
+        version = 1
         block = ValidateShare()
-        output = block._ValidateShare__gen_element(msg, p1, p2, struct.pack(">I", out_gen_indexes))
+        output = block._ValidateShare__gen_element(version, msg, p1, p2, struct.pack(">I", out_gen_indexes))
         self.assertEqual(output, 1442183731460476782005370820367939156210879287829514232459313282341328232038)
+
+    def test_gen_element_version_2(self):
+        """
+        We expect that return hash with algorithm Autolykos v. 2: H(j|pk|w|M|m) (line 5 from the Algo 2 of the spec)
+        """
+        msg = "5eb06b3c197222a6de4c855c303ef360094340ffac2ba3fb5754ed45b712d562".encode("ascii")
+        pk = "02f7073f0edbb4a65e3ee6d53e112295b3b1af1af1b0829c6b716445f59c9615a8".encode("ascii")
+        w = "03ddf4fe8a28552be5762b793a3a9b6ec50076fd1bd00441361f6c3d04ff498967".encode("ascii")
+        out_gen_indexes = 7733468
+        version = 2
+        block = ValidateShare()
+        output = block._ValidateShare__gen_element(version, msg, pk, w, struct.pack(">I", out_gen_indexes))
+        self.assertEqual(output, 67980197431377320540722737401113616479623497159227981059038862671115963744658)
 
     @patch("requests.get", side_effect=mocked_requests_get)
     @patch("Api.utils.share.ValidateShare.save_share", side_effect=mocked_account_request)
@@ -438,8 +506,8 @@ class TestValidateShare(TransactionTestCase):
             "client_ip": '127.0.0.1'
         }
 
-        configs = dict(TestProofValidate.default_configs)
-        TestProofValidate.returned_configs = configs
+        configs = dict(TestValidateShare.default_configs)
+        TestValidateShare.returned_configs = configs
 
         block = ValidateShare()
         block.validate(share['pk'], share['w'], share['nonce'], share['d'], share['msg'], share['tx_id'],
@@ -453,7 +521,7 @@ class TestValidateShare(TransactionTestCase):
         })])
 
 
-class TestProofValidate(TransactionTestCase):
+class TestValidateProof(TransactionTestCase):
     reset_sequences = True
     default_configs = {
         'POOL_BASE_FACTOR': 1000,
@@ -462,7 +530,8 @@ class TestProofValidate(TransactionTestCase):
         'REWARD_FACTOR': 0.96296297,
         'SHARE_CHUNK_SIZE': 10,
         'THRESHOLD_HEIGHT': 10,
-        'THRESHOLD_TIMESTAMP': 120000
+        'THRESHOLD_TIMESTAMP': 120000,
+        'VERSION_ALGO_MINING': 1
     }
 
     returned_configs = None
@@ -549,7 +618,7 @@ class TestProofValidate(TransactionTestCase):
         url = args[0]
 
         if url == urljoin(ACCOUNTING_URL, 'conf/'):
-            return MockResponse(TestProofValidate.returned_configs, 200)
+            return MockResponse(TestValidateProof.returned_configs, 200)
 
     @patch("requests.get", side_effect=mocked_requests_get)
     @patch("Api.utils.general.General.node_request", side_effect=mocked_node_request)
@@ -566,8 +635,8 @@ class TestProofValidate(TransactionTestCase):
             "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
             "levels": ["01c9a7e42a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"]
         }
-        configs = dict(TestProofValidate.default_configs)
-        TestProofValidate.returned_configs = configs
+        configs = dict(TestValidateProof.default_configs)
+        TestValidateProof.returned_configs = configs
         # Create object from class ValidateProofSerializer and call function validate for validation Proof
         proof = ValidateProofSerializer()
         response = proof.validate(proof_data)
@@ -597,8 +666,8 @@ class TestProofValidate(TransactionTestCase):
             "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
             "levels": ["00c9a7e42a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"]
         }
-        configs = dict(TestProofValidate.default_configs)
-        TestProofValidate.returned_configs = configs
+        configs = dict(TestValidateProof.default_configs)
+        TestValidateProof.returned_configs = configs
         # Create object from class ValidateProofSerializer and call function validate for validation Proof
         proof = ValidateProofSerializer()
         # check Raise exception
@@ -620,8 +689,8 @@ class TestProofValidate(TransactionTestCase):
             "leaf": "53c538c7f7fcc79e2980ce41ac65ddf9d3db979a9aeeccd9b46d8e81a8a291d5",
             "levels": ["00c9a7e42a405a771add3b28b2538731577322930648b08ef4e5fd98854c064a7a"]
         }
-        configs = dict(TestProofValidate.default_configs)
-        TestProofValidate.returned_configs = configs
+        configs = dict(TestValidateProof.default_configs)
+        TestValidateProof.returned_configs = configs
         # Create object from class ValidateProofSerializer and call function validate for validation Proof
         proof = ValidateProofSerializer()
         # check Raise exception
@@ -638,7 +707,8 @@ class TestValidation(TransactionTestCase):
         'REWARD_FACTOR': 0.96296297,
         'SHARE_CHUNK_SIZE': 10,
         'THRESHOLD_HEIGHT': 10,
-        'THRESHOLD_TIMESTAMP': 120000
+        'THRESHOLD_TIMESTAMP': 120000,
+        'VERSION_ALGO_MINING': 1
     }
 
     returned_configs = None
@@ -1422,7 +1492,8 @@ class TestGeneratePath(TestCase):
         'REWARD_FACTOR': 0.96296297,
         'SHARE_CHUNK_SIZE': 10,
         'THRESHOLD_HEIGHT': 10,
-        'THRESHOLD_TIMESTAMP': 120000
+        'THRESHOLD_TIMESTAMP': 120000,
+        'VERSION_ALGO_MINING': 1
     }
 
     def mocked_requests_get(*args, **kwargs):
