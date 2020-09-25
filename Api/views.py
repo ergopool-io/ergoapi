@@ -90,7 +90,8 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
                                     data['proof']['block'],
                                     data['miner_address'],
                                     client_ip,
-                                    configs.POOL_BASE_FACTOR)
+                                    configs
+                                    )
 
         logger.info("tasks created for each share.")
         return Response({'status': 'OK'}, status=status.HTTP_200_OK)

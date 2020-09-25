@@ -41,18 +41,22 @@ class ValidateShare(General, celery.Task):
     @property
     def base_factor(self):
         if not self._base_factor:
-            if not self.POOL_BASE_FACTOR:
-                self.POOL_BASE_FACTOR = LazyConfiguration().POOL_BASE_FACTOR
-
-            self._base_factor = self.POOL_BASE_FACTOR
+            self._base_factor = LazyConfiguration().POOL_BASE_FACTOR
         return self._base_factor
 
-    def __init__(self):
-        self._base_factor = None
-        self.POOL_BASE_FACTOR = None
+    @property
+    def version_algo_mining(self):
+        if not self._version_algo_mining:
+            self._version_algo_mining = LazyConfiguration().VERSION_ALGO_MINING
+        return self._version_algo_mining
 
-    def run(self, pk, w, nonce, d, msg, tx_id, block, miner_address, client_ip, pool_base_factor, *args, **kwargs):
-        self.POOL_BASE_FACTOR = pool_base_factor
+    def __init__(self):
+        self._version_algo_mining = None
+        self._base_factor = None
+
+    def run(self, pk, w, nonce, d, msg, tx_id, block, miner_address, client_ip, configs, *args, **kwargs):
+        self._version_algo_mining = configs.VERSION_ALGO_MINING
+        self._base_factor = configs.POOL_BASE_FACTOR
         self.validate(pk, w, nonce, d, msg, tx_id, block, miner_address, client_ip)
 
     def __get_base(self, difficulty):
@@ -100,7 +104,7 @@ class ValidateShare(General, celery.Task):
                 return x
             array_byte = hashed
 
-    def __gen_element(self, m, pk, w, index_bytes):
+    def __gen_element(self, version, m, pk, w, index_bytes):
         """
         Generate element of Autolykos equation.
 
@@ -113,7 +117,14 @@ class ValidateShare(General, celery.Task):
         if self.M is b'':
             for item in map(lambda i: struct.pack('>Q', i), range(0, 1024)):
                 self.M += item
-        return self.__hash_in(index_bytes + self.M + pk + m + w)
+
+        if version == 1:
+            # Autolykos v. 1: H(j|M|pk|m|w) (line 5 from the Algo 2 of the spec)
+            hash_autolykos = self.__hash_in(index_bytes + self.M + pk + m + w)
+        else:
+            # Autolykos v. 2: H(j|pk|w|M|m) (line 5 from the Algo 2 of the spec)
+            hash_autolykos = self.__hash_in(index_bytes + pk + w + self.M + m)
+        return hash_autolykos
 
     def __ec_point(self, array_byte):
         """
@@ -150,14 +161,18 @@ class ValidateShare(General, celery.Task):
         # Compare difficulty and base and return
         return 1 if d < base else (2 if base < d < pool_difficulty else 0)
 
-    def __validate_right_left(self, message, nonce, p1, p2, d):
+    def __validate_right_left(self, message, nonce, pk_bytes, w_bytes, d):
+        # Autolykos v1, Alg. 2, line4: m || nonce
+        # Autolykos v2, Alg. 2, line 4: pk || w || m || nonce
+        seed = (message + nonce) if self.version_algo_mining == 1 else (pk_bytes + w_bytes + message + nonce)
+
         f = list()
-        for i in self.__gen_indexes(message + nonce):
-            check = self.__gen_element(message, p1, p2, struct.pack('>I', i))
+        for i in self.__gen_indexes(seed):
+            check = self.__gen_element(self.version_algo_mining, message, pk_bytes, w_bytes, struct.pack('>I', i))
             f.append(check)
         f = sum(f) % self.ec_order
-        pk_ec_point = self.__ec_point(p1)
-        w_ec_point = self.__ec_point(p2)
+        pk_ec_point = self.__ec_point(pk_bytes)
+        w_ec_point = self.__ec_point(w_bytes)
         left = w_ec_point['value'].mul(f)
         right = self.ec_generator.mul(d).add(pk_ec_point['value'])
         return 1 if left == right else 0
@@ -236,8 +251,8 @@ class ValidateShare(General, celery.Task):
             # Convert to array bytes
             try:
                 nonce = decode(n, "hex")
-                p1 = decode(pk, "hex")
-                p2 = decode(w, "hex")
+                pk_bytes = decode(pk, "hex")
+                w_bytes = decode(w, "hex")
                 message = decode(msg, "hex")
             except ValueError as e:
                 logger.debug("share input parameters aren't valid, {}.".format(e))
@@ -258,7 +273,7 @@ class ValidateShare(General, celery.Task):
             )
             # validate_right_left
             logger.info('Validating left adn right for share {} with pk {}.'.format(share_id, pk))
-            validation = self.__validate_right_left(message, nonce, p1, p2, d)
+            validation = self.__validate_right_left(message, nonce, pk_bytes, w_bytes, d)
             logger.debug(
                 'Validation left and right result for share with pk {} and share {} is {}'.format(
                     pk, share_id, validation
