@@ -1,4 +1,5 @@
 import logging
+import traceback
 from urllib.parse import urljoin
 
 import requests
@@ -15,7 +16,6 @@ ACCOUNTING = getattr(settings, "ACCOUNTING_URL")
 ACCOUNTING_HOST = getattr(settings, "ACCOUNTING_HOST")
 SHARE_CHUNK_SIZE = getattr(settings, "SHARE_CHUNK_SIZE", 10)
 WALLET_ADDRESS = getattr(settings, "WALLET_ADDRESS")
-
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +101,7 @@ class DefaultView(APIView):
     """
     sends every api requests that is not previously matched to accounting.
     """
+
     def send_request(self, request, url, method_name):
         client_ip = request.META.get('REMOTE_ADDR', '')
         request_headers = dict(request.headers)
@@ -114,21 +115,26 @@ class DefaultView(APIView):
         method = getattr(requests, method_name)
         response = None
         try:
-            response = method(urljoin(ACCOUNTING, url + '/'), data=request.data,
-                              headers=headers, params=dict(request.query_params))
+            kwargs = {'headers': headers, 'params': dict(request.query_params)}
+            if request.headers['Content-Type'] == 'application/json':
+                kwargs.update({'json': request.data})
+            else:
+                kwargs.update({'data': request.data})
+            response = method(urljoin(ACCOUNTING, url + '/'), **kwargs)
             try:
                 result = modify_pagination(request, response.json())
                 return Response(result, status=response.status_code)
-
             except:
-                return Response(response.json(), status=response.status_code)
+                return Response(response.json(), status=response.status_code, content_type=response.headers['Content-Type'])
 
         except:
+            traceback.print_exc()
             if response:
                 logger.critical('Could not connect to accounting!, {}, {}'.format(response, response.content))
             else:
                 logger.critical('Could not connect to accounting!, {}'.format(response))
-            return Response({'message': 'could not connect to accounting!'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'message': 'could not connect to accounting!'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def get(self, request, url=None):
         return self.send_request(request, url, 'get')
