@@ -128,7 +128,7 @@ class DefaultView(APIView):
                 return Response(response.json(), status=response.status_code, content_type=response.headers['Content-Type'])
 
         except:
-            traceback.print_exc()
+            logger.error(traceback.format_exc())
             if response:
                 logger.critical('Could not connect to accounting!, {}, {}'.format(response, response.content))
             else:
