@@ -116,7 +116,7 @@ class DefaultView(APIView):
         response = None
         try:
             kwargs = {'headers': headers, 'params': dict(request.query_params)}
-            if request.headers['Content-Type'] == 'application/json':
+            if request.headers.get('Content-Type') == 'application/json':
                 kwargs.update({'json': request.data})
             else:
                 kwargs.update({'data': request.data})
