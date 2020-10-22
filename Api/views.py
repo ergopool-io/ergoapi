@@ -90,7 +90,8 @@ class ValidationView(viewsets.GenericViewSet, mixins.CreateModelMixin):
                                     data['proof']['block'],
                                     data['miner_address'],
                                     client_ip,
-                                    configs
+                                    configs.POOL_BASE_FACTOR,
+                                    configs.VERSION_ALGO_MINING
                                     )
 
         logger.info("tasks created for each share.")

@@ -54,9 +54,9 @@ class ValidateShare(General, celery.Task):
         self._version_algo_mining = None
         self._base_factor = None
 
-    def run(self, pk, w, nonce, d, msg, tx_id, block, miner_address, client_ip, configs, *args, **kwargs):
-        self._version_algo_mining = configs.VERSION_ALGO_MINING
-        self._base_factor = configs.POOL_BASE_FACTOR
+    def run(self, pk, w, nonce, d, msg, tx_id, block, miner_address, client_ip, pool_base_factor, version_algo_mining, *args, **kwargs):
+        self._version_algo_mining = version_algo_mining
+        self._base_factor = pool_base_factor
         self.validate(pk, w, nonce, d, msg, tx_id, block, miner_address, client_ip)
 
     def __get_base(self, difficulty):
